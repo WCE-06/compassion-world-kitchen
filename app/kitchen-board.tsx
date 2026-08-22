@@ -19,11 +19,7 @@ const ENTRY_BGM_BASE_VOLUME = 0.62;
 const BGM_DUCK_VOLUME = 0.04;
 
 function scheduledVolume() {
-  const now = new Date(), minutes = now.getHours() * 60 + now.getMinutes();
-  if (minutes >= 2 * 60 && minutes < 8 * 60) return 0.0000001;
-  if (minutes >= 22 * 60 + 30 || minutes < 2 * 60) return 0.10;
-  if (minutes >= 21 * 60 + 30) return 0.175;
-  return 0.25;
+  return entryMasterVolume();
 }
 
 function entryMasterVolume() { const hour = new Date().getHours(); if (hour < 2) return 0.30; if (hour < 8) return 0.01; if (hour < 9) return 0.75; if (hour < 18) return 1; if (hour < 21) return 0.75; return 0.50; }
