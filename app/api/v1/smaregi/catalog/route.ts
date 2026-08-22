@@ -12,9 +12,12 @@ export async function GET() {
     const smaregi = await getSmaregiCatalog();
     if (smaregi.environment === "production" && smaregi.products.length > 0) {
       const sharedByCode = new Map(shared?.products.map((product) => [product.productCode, product]) ?? []);
+      const kitchenProducts = smaregi.products.filter((product) => sharedByCode.has(product.productCode));
+      const kitchenCategoryIds = new Set(kitchenProducts.map((product) => product.categoryId));
       return NextResponse.json({
         ...smaregi,
-        products: smaregi.products.map((product) => ({ ...product, ...sharedByCode.get(product.productCode), categoryId: product.categoryId })),
+        products: kitchenProducts.map((product) => ({ ...product, ...sharedByCode.get(product.productCode), categoryId: product.categoryId })),
+        categories: smaregi.categories.filter((category) => kitchenCategoryIds.has(category.categoryId)),
         source: "smaregi-production",
         readOnly: false,
         syncedAt: shared?.syncedAt ?? null,
