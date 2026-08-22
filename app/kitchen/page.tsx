@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import KitchenBoard from "../kitchen-board";
+import AuthenticatedBoard from "../authenticated-board";
 
 export const metadata: Metadata = {
   title: "注文管理 | COMPASSION WORLD",
@@ -7,5 +7,5 @@ export const metadata: Metadata = {
 };
 
 export default function KitchenPage() {
-  return <KitchenBoard />;
+  return <AuthenticatedBoard />;
 }

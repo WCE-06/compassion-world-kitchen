@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getChatGPTUser } from "@/app/chatgpt-auth";
+import { hasSiteSessionRequest } from "@/lib/site-auth";
 import { createSmaregiProduct, getSmaregiCatalog, type SmaregiProductInput } from "@/lib/smaregi";
 import { getSharedCatalog } from "@/lib/shared-catalog";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
-  if (!await getChatGPTUser()) return NextResponse.json({ error: "LOGIN_REQUIRED" }, { status: 401 });
+export async function GET(request: NextRequest) {
+  if (!await hasSiteSessionRequest(request)) return NextResponse.json({ error: "LOGIN_REQUIRED" }, { status: 401 });
   try {
     const shared = await getSharedCatalog();
     const smaregi = await getSmaregiCatalog();
@@ -31,7 +31,7 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  if (!await getChatGPTUser()) return NextResponse.json({ error: "LOGIN_REQUIRED" }, { status: 401 });
+  if (!await hasSiteSessionRequest(request)) return NextResponse.json({ error: "LOGIN_REQUIRED" }, { status: 401 });
   const body = await request.json().catch(() => null) as SmaregiProductInput | null;
   if (!body) return NextResponse.json({ error: "INVALID_BODY" }, { status: 400 });
   try {

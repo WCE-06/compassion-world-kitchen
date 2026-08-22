@@ -1,13 +1,13 @@
 import { env } from "cloudflare:workers";
 import { NextRequest, NextResponse } from "next/server";
-import { getChatGPTUser } from "@/app/chatgpt-auth";
+import { hasSiteSessionRequest } from "@/lib/site-auth";
 
 export const dynamic = "force-dynamic";
 
 type Runtime = { KITCHEN_API_TOKEN?: string; MEMBERS_API_BASE_URL?: string };
 
 async function forward(request: NextRequest, method: "GET" | "PATCH") {
-  if (!await getChatGPTUser()) return NextResponse.json({ error: "LOGIN_REQUIRED" }, { status: 401 });
+  if (!await hasSiteSessionRequest(request)) return NextResponse.json({ error: "LOGIN_REQUIRED" }, { status: 401 });
   const runtime = env as unknown as Runtime;
   if (!runtime.KITCHEN_API_TOKEN) return NextResponse.json({ error: "KITCHEN_API_NOT_CONFIGURED" }, { status: 503 });
   const base = runtime.MEMBERS_API_BASE_URL ?? "https://compassion-world-members-card.combetter27.chatgpt.site";

@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import KitchenBoard from "../kitchen-board";
+import AuthenticatedBoard from "../authenticated-board";
 
 export const metadata: Metadata = {
   title: "ご注文状況 | Aozora Kitchen",
@@ -7,5 +7,5 @@ export const metadata: Metadata = {
 };
 
 export default function DisplayPage() {
-  return <KitchenBoard displayOnly />;
+  return <AuthenticatedBoard display />;
 }
