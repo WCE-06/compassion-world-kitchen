@@ -91,6 +91,7 @@ export default function KitchenBoard() {
   }
 
   const current = data[department];
+  const preparing = useMemo(() => [...data.FOOD, ...data.DRINK].filter((item) => item.status === "ACCEPTED" || item.status === "COOKING" || item.status === "READY").sort((a, b) => a.updatedAt - b.updatedAt), [data]);
   const called = useMemo(() => [...data.FOOD, ...data.DRINK].filter((item) => item.status === "CALLED").sort((a, b) => (b.calledAt ?? 0) - (a.calledAt ?? 0)), [data]);
   const count = (status: Status) => [...data.FOOD, ...data.DRINK].filter((item) => item.status === status).length;
 
@@ -102,14 +103,13 @@ export default function KitchenBoard() {
     </header>
 
     {screen === "MENU" ? <MenuManager /> : screen === "MASTER" ? <CookingMaster /> : screen === "CALL_MONITOR" ? <section className="customer-call-monitor">
-      <header><p>COMPASSION WORLD</p><h1>できあがりました</h1><span>番号をご確認のうえ、受取カウンターへお越しください</span></header>
-      <div className="audio-controls">
-        <button className={audioEnabled ? "enabled" : ""} onClick={() => void enableAudio()}>{audioEnabled ? "音声 有効 ✓" : "▶ 音声・BGMを開始"}</button>
-        <button className="bgm-toggle" disabled={!audioEnabled} onClick={toggleBgm}>{bgmEnabled ? "BGM ON" : "BGM OFF"}</button>
-        <span>{audioStatus}</span>
+      <header><p>COMPASSION WORLD</p><h1>ご注文状況</h1><span>お呼び出し中に番号が表示されましたら、受取カウンターへお越しください</span></header>
+      <div className="call-status-board">
+        <section className="call-lane preparing"><header><span>ただいま</span><h2>調理中</h2></header><div className="call-number-list">{preparing.length ? preparing.map((item) => <div className={item.department.toLowerCase()} key={item.id}><small>{item.department === "FOOD" ? "フード" : "ドリンク"}</small><strong>{String(item.callNumber).padStart(3, "0")}</strong></div>) : <p>現在、調理中のご注文はありません</p>}</div></section>
+        <section className="call-lane completed"><header><span>できあがりました</span><h2>お呼び出し中</h2></header><div className="call-number-list">{called.length ? called.map((item) => <div className={item.department.toLowerCase()} key={item.id}><small>{item.department === "FOOD" ? "フード" : "ドリンク"}</small><strong>{String(item.callNumber).padStart(3, "0")}</strong></div>) : <p>完成した番号がここに表示されます</p>}</div></section>
       </div>
-      {called.length ? <div className="called-grid">{called.map((item) => <article className={item.department.toLowerCase()} key={item.id}><small>{item.department === "FOOD" ? "フード" : "ドリンク"}</small><strong>{String(item.callNumber).padStart(3, "0")}</strong><button onClick={() => announce(item)}>♩ 再呼出</button></article>)}</div> : <div className="call-empty"><b>ただいま準備中です</b><span>完成した番号がここに表示されます</span></div>}
     </section> : <>
+      <div className="staff-audio-bar"><div><b>呼出音声・店内BGM</b><span>{audioStatus}</span></div><button className={audioEnabled ? "enabled" : ""} onClick={() => void enableAudio()}>{audioEnabled ? "音声 有効 ✓" : "▶ 音声・BGMを開始"}</button><button className="bgm-toggle" disabled={!audioEnabled} onClick={toggleBgm}>{bgmEnabled ? "BGM ON" : "BGM OFF"}</button></div>
       <section className="summary" aria-label="注文サマリー"><div><span>未着手</span><strong>{count("ACCEPTED")}</strong></div><div><span>調理中</span><strong>{count("COOKING")}</strong></div><div><span>完成</span><strong className="ready-number">{count("READY")}</strong></div><div><span>呼出中</span><strong>{count("CALLED")}</strong></div></section>
       <div className="department-tabs"><button className={department === "FOOD" ? "active food" : ""} onClick={() => setDepartment("FOOD")}>フード <b>{data.FOOD.length}</b></button><button className={department === "DRINK" ? "active drink" : ""} onClick={() => setDepartment("DRINK")}>ドリンク <b>{data.DRINK.length}</b></button><span>4秒ごとに自動更新</span></div>
       {message && <p className="form-notice error">{message}</p>}
@@ -120,7 +120,7 @@ export default function KitchenBoard() {
           <div className="card-head"><div><span className="order-kicker">{item.department === "FOOD" ? "フード呼出番号" : "ドリンク呼出番号"}</span><h2>{String(item.callNumber).padStart(3, "0")}</h2></div><span className="status-chip">{statusLabel[item.status]}</span></div>
           <div className="meta-row"><span>{item.department === "FOOD" ? "フード" : "ドリンク"}</span><span>決済済み</span><span>{elapsed(item.updatedAt)}</span></div>
           <div className="items">{item.items.map((product, index) => <div className="item" key={`${item.id}-${index}`}><strong className="quantity">{product.quantity}</strong><div><h3>{product.name}</h3>{product.options?.map((option) => <p key={option}>↳ {option}</p>)}</div></div>)}</div>
-          {action && <button className="advance" disabled={updating === item.id} onClick={() => void act(item, action.action)}>{updating === item.id ? "更新中…" : action.label} <span>→</span></button>}
+          {action && <div className="card-actions">{item.status === "CALLED" && <button className="recall" onClick={() => announce(item)}>♩ 再呼出</button>}<button className="advance" disabled={updating === item.id} onClick={() => void act(item, action.action)}>{updating === item.id ? "更新中…" : action.label} <span>→</span></button></div>}
         </article>; })}
       </section>
     </>}
