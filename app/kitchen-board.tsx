@@ -30,7 +30,7 @@ function volumeLabel() { return `BGM ${percentLabel(entryBgmVolume())}%・呼出
 
 export default function KitchenBoard({ displayOnly = false }: { displayOnly?: boolean }) {
   const [screen, setScreen] = useState<Screen>(displayOnly ? "CALL_MONITOR" : "ORDERS");
-  const [department, setDepartment] = useState<Department>("FOOD");
+  const [department, setDepartment] = useState<Department | "ALL">("ALL");
   const [data, setData] = useState<Record<Department, Fulfillment[]>>({ FOOD: [], DRINK: [] });
   const [history, setHistory] = useState<Fulfillment[]>([]);
   const [loading, setLoading] = useState(true), [message, setMessage] = useState(""), [updating, setUpdating] = useState<string | null>(null);
@@ -134,7 +134,8 @@ export default function KitchenBoard({ displayOnly = false }: { displayOnly?: bo
     finally { setUpdating(null); }
   }
 
-  const current = data[department];
+  const current = useMemo(() => (department === "ALL" ? [...data.FOOD, ...data.DRINK] : [...data[department]]).sort(orderPriority), [data, department]);
+  const nextTask = current.find((item) => item.status === "READY") ?? current.find((item) => item.status === "ACCEPTED") ?? current.find((item) => item.status === "COOKING") ?? current.find((item) => item.status === "CALLED");
   const preparing = useMemo(() => [...data.FOOD, ...data.DRINK].filter((item) => item.status === "ACCEPTED" || item.status === "COOKING" || item.status === "READY").sort((a, b) => a.updatedAt - b.updatedAt), [data]);
   const called = useMemo(() => [...data.FOOD, ...data.DRINK].filter((item) => item.status === "CALLED").sort((a, b) => (b.calledAt ?? 0) - (a.calledAt ?? 0)), [data]);
   const count = (status: Status) => [...data.FOOD, ...data.DRINK].filter((item) => item.status === status).length;
@@ -155,11 +156,12 @@ export default function KitchenBoard({ displayOnly = false }: { displayOnly?: bo
     </section> : <>
       <div className="staff-audio-bar"><div><b>呼出音声・店内BGM</b><span>{audioStatus}</span></div><button className={audioEnabled ? "enabled" : ""} onClick={() => void enableAudio()}>{audioEnabled ? "音声 有効 ✓" : "▶ 音声・BGMを開始"}</button><button className="bgm-toggle" disabled={!audioEnabled || testingFull} onClick={toggleBgm}>{bgmEnabled ? "BGM ON" : "BGM OFF"}</button><button className="volume-test" disabled={testingFull} onClick={() => void testFullVolume()}>{testingFull ? "100%テスト中…" : "100%を3秒テスト"}</button></div>
       <section className="summary" aria-label="注文サマリー"><div><span>未着手</span><strong>{count("ACCEPTED")}</strong></div><div><span>調理中</span><strong>{count("COOKING")}</strong></div><div><span>完成</span><strong className="ready-number">{count("READY")}</strong></div><div><span>呼出中</span><strong>{count("CALLED")}</strong></div></section>
-      <div className="department-tabs"><button className={department === "FOOD" ? "active food" : ""} onClick={() => setDepartment("FOOD")}>フード <b>{data.FOOD.length}</b></button><button className={department === "DRINK" ? "active drink" : ""} onClick={() => setDepartment("DRINK")}>ドリンク <b>{data.DRINK.length}</b></button><span>4秒ごとに自動更新</span></div>
+      <div className="department-tabs"><button className={department === "ALL" ? "active all" : ""} onClick={() => setDepartment("ALL")}>すべて <b>{data.FOOD.length + data.DRINK.length}</b></button><button className={department === "FOOD" ? "active food" : ""} onClick={() => setDepartment("FOOD")}>フード <b>{data.FOOD.length}</b></button><button className={department === "DRINK" ? "active drink" : ""} onClick={() => setDepartment("DRINK")}>ドリンク <b>{data.DRINK.length}</b></button><span>4秒ごとに自動更新</span></div>
+      {department === "ALL" && nextTask && <div className={`next-task status-${nextTask.status.toLowerCase()}`}><span>今すべきこと</span><strong>{actionByStatus[nextTask.status]?.label ?? statusLabel[nextTask.status]}</strong><b>{nextTask.department === "FOOD" ? "フード" : "ドリンク"} {String(nextTask.callNumber).padStart(3, "0")}</b><small>{nextTask.items.map(item => `${item.name} ×${item.quantity}`).join("、")}</small></div>}
       {message && <p className="form-notice error">{message}</p>}
       <section className="order-grid" aria-live="polite">
         {loading && <div className="empty-menu">注文を取得しています…</div>}
-        {!loading && !current.length && <div className="empty-menu">現在、{department === "FOOD" ? "フード" : "ドリンク"}の待ち注文はありません。</div>}
+        {!loading && !current.length && <div className="empty-menu">現在、{department === "ALL" ? "対応が必要な" : department === "FOOD" ? "フード" : "ドリンク"}待ち注文はありません。</div>}
         {current.map((item) => { const action = actionByStatus[item.status]; return <article className={`order-card status-${item.status.toLowerCase()} department-${item.department.toLowerCase()}`} key={item.id}>
           <div className="card-head"><div><span className="order-kicker">{item.department === "FOOD" ? "フード呼出番号" : "ドリンク呼出番号"}</span><h2>{String(item.callNumber).padStart(3, "0")}</h2></div><span className="status-chip">{statusLabel[item.status]}</span></div>
           <div className="meta-row"><span>{item.department === "FOOD" ? "フード" : "ドリンク"}</span><span>決済済み</span><span>{item.estimatedReadyAt ? `提供予定 ${clock(item.estimatedReadyAt)}` : "提供予定 できあがり次第"}</span><span>{elapsed(item.updatedAt)}</span></div>
@@ -172,6 +174,7 @@ export default function KitchenBoard({ displayOnly = false }: { displayOnly?: bo
 }
 
 function elapsed(time: number) { const minutes = Math.max(0, Math.floor((Date.now() - time) / 60000)); return minutes < 1 ? "たった今" : `${minutes}分経過`; }
+function orderPriority(a:Fulfillment,b:Fulfillment){const rank:Record<Status,number>={READY:0,CALLED:1,ACCEPTED:2,COOKING:3,PICKED_UP:4,CANCELLED:5};const difference=rank[a.status]-rank[b.status];if(difference)return difference;const aTime=a.estimatedReadyAt??a.updatedAt,bTime=b.estimatedReadyAt??b.updatedAt;return aTime-bTime}
 function clock(time:number){return new Intl.DateTimeFormat("ja-JP",{hour:"2-digit",minute:"2-digit"}).format(new Date(time));}
 function friendly(message: string) { if (message.includes("UNAUTHORIZED")) return "会員証システムとの認証設定を確認してください"; if (message.includes("UNAVAILABLE")) return "会員証システムへ接続できません"; if (message.includes("INVALID_STATUS_TRANSITION")) return "別の端末で状態が更新されました"; return message; }
 async function playLegacyCall(item: Fulfillment) {
