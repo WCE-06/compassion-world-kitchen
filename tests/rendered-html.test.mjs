@@ -16,8 +16,9 @@ test("キッチンモニターをサーバーレンダリングする", async ()
   const html = await response.text();
   assert.match(html, /Kitchen Monitor \| COMPASSION WORLD/);
   assert.match(html, /KITCHEN MONITOR/);
-  assert.match(html, /A-1842/);
-  assert.match(html, /調理を開始/);
+  assert.match(html, /呼出モニター/);
+  assert.match(html, /フード/);
+  assert.match(html, /ドリンク/);
   assert.match(html, /メニュー管理/);
   assert.doesNotMatch(html, /codex-preview/);
   assert.doesNotMatch(html, /react-loading-skeleton/);
