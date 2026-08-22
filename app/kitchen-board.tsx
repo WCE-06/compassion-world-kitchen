@@ -103,7 +103,7 @@ export default function KitchenBoard({ displayOnly = false }: { displayOnly?: bo
     </header>}
 
     {screen === "MENU" ? <MenuManager /> : screen === "MASTER" ? <CookingMaster /> : screen === "CALL_MONITOR" ? <section className="customer-call-monitor">
-      <header><p>COMPASSION WORLD</p><h1>ご注文状況</h1><span>お呼び出し中に番号が表示されましたら、受取カウンターへお越しください</span></header>
+      <header><p>AOZORA KITCHEN</p><h1>ご注文状況</h1><span>お呼び出し中に番号が表示されましたら、受取カウンターへお越しください</span></header>
       <div className="call-status-board">
         <section className="call-lane preparing"><header><span>ただいま</span><h2>調理中</h2></header><div className="call-number-list">{preparing.length ? preparing.map((item) => <div className={item.department.toLowerCase()} key={item.id}><small>{item.department === "FOOD" ? "フード" : "ドリンク"}{item.estimatedReadyAt && <em>{clock(item.estimatedReadyAt)}ごろ</em>}</small><strong>{String(item.callNumber).padStart(3, "0")}</strong></div>) : <p>現在、調理中のご注文はありません</p>}</div></section>
         <section className="call-lane completed"><header><span>できあがりました</span><h2>お呼び出し中</h2></header><div className="call-number-list">{called.length ? called.map((item) => <div className={item.department.toLowerCase()} key={item.id}><small>{item.department === "FOOD" ? "フード" : "ドリンク"}</small><strong>{String(item.callNumber).padStart(3, "0")}</strong></div>) : <p>完成した番号がここに表示されます</p>}</div></section>
