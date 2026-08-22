@@ -11,11 +11,13 @@ type MenuItem = {
   smaregiCategoryId: string;
   image?: string;
   soldOut?: boolean;
+  menuCategory: string;
+  displaySequence: number;
   status: "PUBLISHED" | "DRAFT";
 };
 type Category = { categoryId: string; categoryName: string };
 type CatalogResponse = {
-  products?: { productId: string; categoryId: string; productCode: string; productName: string; price: string; imageUrl?: string; soldOut?: boolean }[];
+  products?: { productId: string; categoryId: string; productCode: string; productName: string; price: string; imageUrl?: string; soldOut?: boolean; menuCategory?: string; displaySequence?: number | string }[];
   categories?: Category[];
   environment?: "sandbox" | "production";
   source?: "shared-catalog" | "smaregi-production";
@@ -34,6 +36,10 @@ export default function MenuManager() {
   const [environment, setEnvironment] = useState<"sandbox" | "production">("sandbox");
   const [sharedCatalog, setSharedCatalog] = useState(false);
   const [syncedAt, setSyncedAt] = useState<string | null>(null);
+  const [surface, setSurface] = useState<"mobile" | "register">("mobile");
+  const [menuCategory, setMenuCategory] = useState("food-tsukemen");
+  const [orderDirty, setOrderDirty] = useState(false);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
   const libraryInput = useRef<HTMLInputElement>(null);
   const cameraInput = useRef<HTMLInputElement>(null);
 
@@ -57,6 +63,8 @@ export default function MenuManager() {
         smaregiCategoryId: item.categoryId,
         image: item.imageUrl || undefined,
         soldOut: item.soldOut,
+        menuCategory: item.menuCategory ?? "food-side",
+        displaySequence: Number(item.displaySequence ?? 999999999),
         status: "PUBLISHED",
       })));
     } catch (error) {
@@ -72,8 +80,41 @@ export default function MenuManager() {
   useEffect(() => { void loadCatalog(); }, []);
 
   function openForm(item?: MenuItem) {
-    setEditing(item ? { ...item } : { id: "", name: "", code: "", price: 0, category: "FOOD", smaregiCategoryId: categories[0]?.categoryId ?? "", status: "DRAFT" });
+    setEditing(item ? { ...item } : { id: "", name: "", code: "", price: 0, category: "FOOD", smaregiCategoryId: categories[0]?.categoryId ?? "", menuCategory, displaySequence: 999999999, status: "DRAFT" });
     setNotice("");
+  }
+
+  const categoryTabs = [["food-tsukemen", "つけ麺"], ["food-udon", "うどん・ほうとう"], ["food-pasta", "パスタ"], ["food-don", "ご飯もの"], ["food-side", "サイド"], ["drink", "ドリンク"], ["dessert", "デザート"]] as const;
+  const drinkTabs = [["soft-cafe", "カフェ"], ["soft-simple", "ソフトドリンク"], ["soft-mocktail", "モクテル"], ["alcohol-main", "ビール・焼酎など"], ["alcohol-cocktail", "カクテル"]] as const;
+  const bucket = (item: MenuItem) => item.menuCategory === "cocktail" ? "alcohol-cocktail" : item.menuCategory === "mocktail" ? "soft-mocktail" : item.menuCategory;
+  const visibleMenus = menus.filter((item) => menuCategory === "drink" ? bucket(item).startsWith("soft-") || bucket(item).startsWith("alcohol-") : bucket(item) === menuCategory).sort((a, b) => a.displaySequence - b.displaySequence || a.name.localeCompare(b.name, "ja"));
+
+  function moveMenu(sourceId: string, targetId: string) {
+    if (sourceId === targetId) return;
+    const ids = visibleMenus.map((item) => item.id);
+    const sourceIndex = ids.indexOf(sourceId), targetIndex = ids.indexOf(targetId);
+    if (sourceIndex < 0 || targetIndex < 0) return;
+    ids.splice(targetIndex, 0, ids.splice(sourceIndex, 1)[0]);
+    const sequence = new Map(ids.map((id, index) => [id, (index + 1) * 10]));
+    setMenus((current) => current.map((item) => sequence.has(item.id) ? { ...item, displaySequence: sequence.get(item.id)! } : item));
+    setOrderDirty(true);
+  }
+
+  function nudgeMenu(id: string, amount: -1 | 1) {
+    const index = visibleMenus.findIndex((item) => item.id === id);
+    const target = visibleMenus[index + amount];
+    if (target) moveMenu(id, target.id);
+  }
+
+  async function saveOrder() {
+    setSaving(true); setNotice("");
+    try {
+      const response = await fetch("/api/v1/smaregi/catalog/order", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ productIds: visibleMenus.map((item) => item.id) }) });
+      const body = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(body.error ?? "表示順を保存できませんでした");
+      setOrderDirty(false); setNotice(`${surface === "mobile" ? "モバイルオーダー" : "セルフレジ"}の表示順をスマレジへ保存しました`);
+    } catch (error) { setNotice(error instanceof Error ? friendlyError(error.message) : "表示順を保存できませんでした"); }
+    finally { setSaving(false); }
   }
 
   function selectImage(event: ChangeEvent<HTMLInputElement>) {
@@ -166,15 +207,22 @@ export default function MenuManager() {
       </div>
       {sharedCatalog && <p className="saved-notice">スマレジ本番商品 {menus.length.toLocaleString("ja-JP")}件を同期済み{syncedAt ? `（${new Date(syncedAt).toLocaleString("ja-JP")}）` : ""}。登録・修正は本番の書き込み認証を接続後に有効になります。</p>}
       {notice && <p className={notice.includes("エラー") ? "form-notice error" : "saved-notice"}>{notice}</p>}
-      <div className="menu-table">
-        <div className="menu-table-head"><span>商品</span><span>商品コード</span><span>価格</span><span>連携状態</span><span /></div>
+      <div className="menu-display-toolbar">
+        <div className="surface-switch" aria-label="表示先"><button className={surface === "mobile" ? "active" : ""} onClick={() => setSurface("mobile")}>モバイルオーダー</button><button className={surface === "register" ? "active" : ""} onClick={() => setSurface("register")}>セルフレジ</button></div>
+        <p><b>{surface === "mobile" ? "スマートフォン表示" : "セルフレジ表示"}</b><span>つまんで移動、または矢印で表示順を変更できます。並び順は両方へ共通反映されます。</span></p>
+        <button className="save-order" disabled={!orderDirty || saving || visibleMenus.length === 0} onClick={() => void saveOrder()}>{saving ? "保存中…" : "表示順を保存"}</button>
+      </div>
+      <nav className="manager-genre-tabs">{categoryTabs.map(([key, label]) => <button key={key} className={(menuCategory === key || (key === "drink" && (menuCategory.startsWith("soft-") || menuCategory.startsWith("alcohol-")))) ? "active" : ""} onClick={() => setMenuCategory(key)}>{label}<small>{menus.filter((item) => key === "drink" ? bucket(item).startsWith("soft-") || bucket(item).startsWith("alcohol-") : bucket(item) === key).length}</small></button>)}</nav>
+      {(menuCategory === "drink" || menuCategory.startsWith("soft-") || menuCategory.startsWith("alcohol-")) && <nav className="manager-drink-tabs">{drinkTabs.map(([key, label]) => <button key={key} className={menuCategory === key ? "active" : ""} onClick={() => setMenuCategory(key)}>{label}</button>)}</nav>}
+      <div className={`sortable-menu-grid ${surface}`}>
         {loading && <div className="empty-menu">スマレジから商品を取得しています…</div>}
-        {!loading && menus.length === 0 && <div className="empty-menu">表示できる商品がありません。接続状態を確認してください。</div>}
-        {menus.map((item) => <article className="menu-row" key={item.id}>
-          <div className="menu-product"><div className={`menu-thumb ${item.image ? "has-image" : ""}`}>{item.image ? <>{/* eslint-disable-next-line @next/next/no-img-element */}<img src={item.image} alt="" /></> : <span>POS</span>}</div><div><b>{item.name}</b><small>{categories.find((category) => category.categoryId === item.smaregiCategoryId)?.categoryName ?? `部門 ${item.smaregiCategoryId}`}{item.soldOut ? "・売切" : ""}</small></div></div>
-          <span>{item.code || "—"}</span><strong>¥{item.price.toLocaleString("ja-JP")}</strong>
-          <span className="sync-status">スマレジ連携済</span>
-          <button className="edit-menu" disabled={sharedCatalog} onClick={() => openForm(item)}>{sharedCatalog ? "参照中" : "商品情報を修正"}</button>
+        {!loading && visibleMenus.length === 0 && <div className="empty-menu">このカテゴリに表示する商品はありません。</div>}
+        {visibleMenus.map((item, index) => <article className={`sortable-menu-card ${draggingId === item.id ? "dragging" : ""}`} key={item.id} draggable onDragStart={() => setDraggingId(item.id)} onDragEnd={() => setDraggingId(null)} onDragOver={(event) => event.preventDefault()} onDrop={() => { if (draggingId) moveMenu(draggingId, item.id); setDraggingId(null); }}>
+          <div className="drag-handle" aria-label="ドラッグして並べ替え">⠿<small>{index + 1}</small></div>
+          <div className={`menu-thumb ${item.image ? "has-image" : ""}`}>{item.image ? <>{/* eslint-disable-next-line @next/next/no-img-element */}<img src={item.image} alt="" /></> : <span>POS</span>}</div>
+          <div className="sortable-menu-info"><b>{item.name}</b><span>¥{item.price.toLocaleString("ja-JP")}</span><small>{item.code || "コードなし"}{item.soldOut ? "・売切" : ""}</small></div>
+          <div className="order-controls"><button disabled={index === 0} onClick={() => nudgeMenu(item.id, -1)} aria-label={`${item.name}を上へ`}>↑</button><button disabled={index === visibleMenus.length - 1} onClick={() => nudgeMenu(item.id, 1)} aria-label={`${item.name}を下へ`}>↓</button></div>
+          <button className="edit-menu" disabled={sharedCatalog} onClick={() => openForm(item)}>編集</button>
         </article>)}
       </div>
       <button className="reload-catalog" onClick={() => void loadCatalog()} disabled={loading}>↻ スマレジから再取得</button>

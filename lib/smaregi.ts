@@ -15,6 +15,7 @@ export type SmaregiProduct = {
   price: string;
   displayFlag: string;
   division: string;
+  displaySequence?: string;
 };
 
 export type SmaregiCategory = {
@@ -114,4 +115,9 @@ export function createSmaregiProduct(input: SmaregiProductInput) {
 export function updateSmaregiProduct(productId: string, input: SmaregiProductInput) {
   if (!/^\d{1,15}$/.test(productId)) throw new Error("INVALID_PRODUCT_ID");
   return smaregiFetch<SmaregiProduct>(`/products/${productId}`, { method: "PATCH", body: JSON.stringify(productPayload(input)) });
+}
+
+export function updateSmaregiDisplaySequence(productId: string, displaySequence: number) {
+  if (!/^\d{1,15}$/.test(productId) || !Number.isInteger(displaySequence) || displaySequence < 0) throw new Error("INVALID_DISPLAY_SEQUENCE");
+  return smaregiFetch<SmaregiProduct>(`/products/${productId}`, { method: "PATCH", body: JSON.stringify({ displaySequence: String(displaySequence) }) });
 }

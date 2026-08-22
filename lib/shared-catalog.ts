@@ -11,6 +11,7 @@ type SharedProduct = {
   imageUrl?: string;
   description?: string;
   soldOut?: boolean;
+  displaySequence?: number;
 };
 
 const categoryNames: Record<string, string> = {
@@ -49,6 +50,8 @@ export async function getSharedCatalog() {
       imageUrl: product.imageUrl ?? "",
       description: product.description ?? "",
       soldOut: Boolean(product.soldOut),
+      menuCategory: product.menuCategory,
+      displaySequence: Number(product.displaySequence ?? 999999999),
     })),
     categories: categoryIds.map((categoryId) => ({ categoryId, categoryName: categoryNames[categoryId] ?? categoryId })),
     environment: "production",
