@@ -18,6 +18,7 @@ test("キッチンモニターをサーバーレンダリングする", async ()
   assert.match(html, /KITCHEN MONITOR/);
   assert.match(html, /A-1842/);
   assert.match(html, /調理を開始/);
+  assert.match(html, /メニュー管理/);
   assert.doesNotMatch(html, /codex-preview/);
   assert.doesNotMatch(html, /react-loading-skeleton/);
 });

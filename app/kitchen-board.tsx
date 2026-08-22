@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import MenuManager from "./menu-manager";
 
 type KitchenStatus = "ACCEPTED" | "COOKING" | "READY" | "PICKED_UP";
 type Filter = "ALL" | KitchenStatus;
@@ -61,6 +62,7 @@ const nextLabel: Partial<Record<KitchenStatus, string>> = {
 };
 
 export default function KitchenBoard() {
+  const [screen, setScreen] = useState<"ORDERS" | "MENU">("ORDERS");
   const [orders, setOrders] = useState(initialOrders);
   const [filter, setFilter] = useState<Filter>("ALL");
   const now = "10:38";
@@ -77,9 +79,14 @@ export default function KitchenBoard() {
     <main className="board-shell">
       <header className="topbar">
         <div className="brand"><span className="brand-mark">CW</span><div><b>COMPASSION WORLD</b><span>KITCHEN MONITOR</span></div></div>
+        <nav className="main-nav" aria-label="管理画面">
+          <button className={screen === "ORDERS" ? "active" : ""} onClick={() => setScreen("ORDERS")}>注文管理</button>
+          <button className={screen === "MENU" ? "active" : ""} onClick={() => setScreen("MENU")}>メニュー管理</button>
+        </nav>
         <div className="connection"><span className="pulse" /> 接続中 <b>{now}</b></div>
       </header>
 
+      {screen === "MENU" ? <MenuManager /> : <>
       <section className="summary" aria-label="注文サマリー">
         <div><span>未着手</span><strong>{counts("ACCEPTED")}</strong></div>
         <div><span>調理中</span><strong>{counts("COOKING")}</strong></div>
@@ -125,6 +132,7 @@ export default function KitchenBoard() {
           </article>
         ))}
       </section>
+      </>}
     </main>
   );
 }
