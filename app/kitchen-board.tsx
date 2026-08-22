@@ -17,21 +17,27 @@ const actionByStatus: Partial<Record<Status, { action: "START" | "READY" | "CALL
 const OLD_BGM_URL = "https://raw.githubusercontent.com/WCE-06/liff-entry/fa5905f5c97a16441dabab90a9ac70d291ec6788/bgm.mp3";
 const BGM_DUCK_VOLUME = 0.04;
 
+function scheduledVolume() {
+  const now = new Date(), minutes = now.getHours() * 60 + now.getMinutes();
+  if (minutes >= 2 * 60 && minutes < 8 * 60) return 0.01;
+  if (minutes >= 22 * 60 + 30 || minutes < 2 * 60) return 0.10;
+  if (minutes >= 21 * 60 + 30) return 0.175;
+  return 0.25;
+}
+
+function volumeLabel() { return `現在の時間帯音量 ${Math.round(scheduledVolume() * 100)}%`; }
+
 export default function KitchenBoard({ displayOnly = false }: { displayOnly?: boolean }) {
   const [screen, setScreen] = useState<Screen>(displayOnly ? "CALL_MONITOR" : "ORDERS");
   const [department, setDepartment] = useState<Department>("FOOD");
   const [data, setData] = useState<Record<Department, Fulfillment[]>>({ FOOD: [], DRINK: [] });
   const [loading, setLoading] = useState(true), [message, setMessage] = useState(""), [updating, setUpdating] = useState<string | null>(null);
   const [lastSync, setLastSync] = useState<Date | null>(null), previousCalled = useRef(new Set<string>()), calledInitialized = useRef(false);
-  const [audioEnabled, setAudioEnabled] = useState(false), [bgmEnabled, setBgmEnabled] = useState(true), [audioStatus, setAudioStatus] = useState("音声は停止中です");
+  const [audioEnabled, setAudioEnabled] = useState(false), [bgmEnabled, setBgmEnabled] = useState(true), [audioStatus, setAudioStatus] = useState(`音声は停止中です・${volumeLabel()}`);
   const bgmRef = useRef<HTMLAudioElement | null>(null), audioQueue = useRef(Promise.resolve()), audioEnabledRef = useRef(false), bgmEnabledRef = useRef(true);
 
   function bgmVolume() {
-    const now = new Date(), minutes = now.getHours() * 60 + now.getMinutes();
-    if (minutes >= 2 * 60 && minutes < 8 * 60) return 0.01;
-    if (minutes >= 22 * 60 + 30 || minutes < 2 * 60) return 0.10;
-    if (minutes >= 21 * 60 + 30) return 0.175;
-    return 0.25;
+    return scheduledVolume();
   }
 
   async function enableAudio() {
@@ -39,8 +45,8 @@ export default function KitchenBoard({ displayOnly = false }: { displayOnly?: bo
     bgm.loop = true; bgm.preload = "auto"; bgm.volume = bgmVolume(); bgmRef.current = bgm;
     try {
       if (bgmEnabled) await bgm.play();
-      audioEnabledRef.current = true; setAudioEnabled(true); setAudioStatus("音声・BGM 稼働中");
-    } catch { audioEnabledRef.current = true; setAudioEnabled(true); setAudioStatus("呼出音声は稼働中（BGMを確認してください）"); }
+      audioEnabledRef.current = true; setAudioEnabled(true); setAudioStatus(`音声・BGM 稼働中・${volumeLabel()}`);
+    } catch { audioEnabledRef.current = true; setAudioEnabled(true); setAudioStatus(`呼出音声は稼働中・${volumeLabel()}`); }
   }
 
   function toggleBgm() {
@@ -55,10 +61,10 @@ export default function KitchenBoard({ displayOnly = false }: { displayOnly?: bo
     const label = `${item.department === "FOOD" ? "フード" : "ドリンク"} ${String(item.callNumber).padStart(3, "0")}`;
     audioQueue.current = audioQueue.current.then(async () => {
       setAudioStatus(`放送中：${label}`);
-      if (bgmRef.current && bgmEnabledRef.current) bgmRef.current.volume = BGM_DUCK_VOLUME;
+      if (bgmRef.current && bgmEnabledRef.current) bgmRef.current.volume = Math.min(bgmVolume(), BGM_DUCK_VOLUME);
       await playLegacyCall(item);
       if (bgmRef.current && bgmEnabledRef.current) bgmRef.current.volume = bgmVolume();
-      setAudioStatus("音声・BGM 稼働中");
+      setAudioStatus(`音声・BGM 稼働中・${volumeLabel()}`);
     });
   }
 
@@ -137,6 +143,6 @@ async function playLegacyCall(item: Fulfillment) {
   await speak(`お待たせいたしました。${department}番号、${number}番のお客様。${number}番のお客様。商品ができあがりました。受け取りカウンターまでお越しください。`);
   playLegacyChime(); await wait(650);
 }
-function speak(text: string) { return new Promise<void>((resolve) => { if (!("speechSynthesis" in window)) { resolve(); return; } const utterance = new SpeechSynthesisUtterance(text); utterance.lang = "ja-JP"; utterance.rate = .88; utterance.pitch = 1; utterance.volume = 1; const voices = window.speechSynthesis.getVoices(); utterance.voice = voices.find((voice) => voice.lang.startsWith("ja")) ?? null; utterance.onend = () => resolve(); utterance.onerror = () => resolve(); window.speechSynthesis.speak(utterance); }); }
-function playLegacyChime() { try { const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext; const context = new AudioContextClass(); [659, 784, 988].forEach((frequency, index) => { const oscillator = context.createOscillator(), gain = context.createGain(), start = context.currentTime + index * .14; oscillator.type = "sine"; oscillator.frequency.value = frequency; gain.gain.setValueAtTime(.0001, start); gain.gain.exponentialRampToValueAtTime(.13, start + .02); gain.gain.exponentialRampToValueAtTime(.0001, start + .32); oscillator.connect(gain); gain.connect(context.destination); oscillator.start(start); oscillator.stop(start + .34); }); } catch { /* 表示は継続 */ } }
+function speak(text: string) { return new Promise<void>((resolve) => { if (!("speechSynthesis" in window)) { resolve(); return; } const utterance = new SpeechSynthesisUtterance(text); utterance.lang = "ja-JP"; utterance.rate = .88; utterance.pitch = 1; utterance.volume = scheduledVolume(); const voices = window.speechSynthesis.getVoices(); utterance.voice = voices.find((voice) => voice.lang.startsWith("ja")) ?? null; utterance.onend = () => resolve(); utterance.onerror = () => resolve(); window.speechSynthesis.speak(utterance); }); }
+function playLegacyChime() { try { const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext; const context = new AudioContextClass(), peak = Math.max(.0002, .13 * scheduledVolume()); [659, 784, 988].forEach((frequency, index) => { const oscillator = context.createOscillator(), gain = context.createGain(), start = context.currentTime + index * .14; oscillator.type = "sine"; oscillator.frequency.value = frequency; gain.gain.setValueAtTime(.0001, start); gain.gain.exponentialRampToValueAtTime(peak, start + .02); gain.gain.exponentialRampToValueAtTime(.0001, start + .32); oscillator.connect(gain); gain.connect(context.destination); oscillator.start(start); oscillator.stop(start + .34); }); } catch { /* 表示は継続 */ } }
 function wait(ms: number) { return new Promise((resolve) => window.setTimeout(resolve, ms)); }
