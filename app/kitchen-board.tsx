@@ -17,8 +17,8 @@ const actionByStatus: Partial<Record<Status, { action: "START" | "READY" | "CALL
 const OLD_BGM_URL = "https://raw.githubusercontent.com/WCE-06/liff-entry/fa5905f5c97a16441dabab90a9ac70d291ec6788/bgm.mp3";
 const BGM_DUCK_VOLUME = 0.04;
 
-export default function KitchenBoard() {
-  const [screen, setScreen] = useState<Screen>("ORDERS");
+export default function KitchenBoard({ displayOnly = false }: { displayOnly?: boolean }) {
+  const [screen, setScreen] = useState<Screen>(displayOnly ? "CALL_MONITOR" : "ORDERS");
   const [department, setDepartment] = useState<Department>("FOOD");
   const [data, setData] = useState<Record<Department, Fulfillment[]>>({ FOOD: [], DRINK: [] });
   const [loading, setLoading] = useState(true), [message, setMessage] = useState(""), [updating, setUpdating] = useState<string | null>(null);
@@ -70,7 +70,7 @@ export default function KitchenBoard() {
       if (!foodResponse.ok || !drinkResponse.ok) throw new Error(food.error ?? drink.error ?? "注文を取得できませんでした");
       const next = { FOOD: food.fulfillments ?? [], DRINK: drink.fulfillments ?? [] } as Record<Department, Fulfillment[]>;
       const called = new Set([...next.FOOD, ...next.DRINK].filter((item) => item.status === "CALLED").map((item) => item.id));
-      if (calledInitialized.current) [...next.FOOD, ...next.DRINK].filter((item) => item.status === "CALLED" && !previousCalled.current.has(item.id)).forEach(announce);
+      if (!displayOnly && calledInitialized.current) [...next.FOOD, ...next.DRINK].filter((item) => item.status === "CALLED" && !previousCalled.current.has(item.id)).forEach(announce);
       calledInitialized.current = true;
       previousCalled.current = called; setData(next); setLastSync(new Date()); setMessage("");
     } catch (error) { setMessage(error instanceof Error ? friendly(error.message) : "注文情報へ接続できませんでした"); }
@@ -95,12 +95,12 @@ export default function KitchenBoard() {
   const called = useMemo(() => [...data.FOOD, ...data.DRINK].filter((item) => item.status === "CALLED").sort((a, b) => (b.calledAt ?? 0) - (a.calledAt ?? 0)), [data]);
   const count = (status: Status) => [...data.FOOD, ...data.DRINK].filter((item) => item.status === status).length;
 
-  return <main className={`board-shell ${screen === "CALL_MONITOR" ? "call-screen" : ""}`}>
-    <header className="topbar">
+  return <main className={`board-shell ${screen === "CALL_MONITOR" ? "call-screen" : ""} ${displayOnly ? "display-only" : ""}`}>
+    {!displayOnly && <header className="topbar">
       <div className="brand"><span className="brand-mark">CW</span><div><b>COMPASSION WORLD</b><span>KITCHEN MONITOR</span></div></div>
       <nav className="main-nav" aria-label="管理画面"><button className={screen === "ORDERS" ? "active" : ""} onClick={() => setScreen("ORDERS")}>注文管理</button><button className={screen === "CALL_MONITOR" ? "active" : ""} onClick={() => setScreen("CALL_MONITOR")}>呼出モニター</button><button className={screen === "MASTER" ? "active" : ""} onClick={() => setScreen("MASTER")}>調理マスタ</button><button className={screen === "MENU" ? "active" : ""} onClick={() => setScreen("MENU")}>メニュー管理</button></nav>
       <div className="connection"><span className="pulse" /> {message ? "接続確認中" : "接続中"} <b>{lastSync?.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" }) ?? "--:--"}</b></div>
-    </header>
+    </header>}
 
     {screen === "MENU" ? <MenuManager /> : screen === "MASTER" ? <CookingMaster /> : screen === "CALL_MONITOR" ? <section className="customer-call-monitor">
       <header><p>COMPASSION WORLD</p><h1>ご注文状況</h1><span>お呼び出し中に番号が表示されましたら、受取カウンターへお越しください</span></header>
