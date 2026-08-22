@@ -34,16 +34,36 @@ export default function KitchenBoard({ displayOnly = false }: { displayOnly?: bo
   const [loading, setLoading] = useState(true), [message, setMessage] = useState(""), [updating, setUpdating] = useState<string | null>(null);
   const [lastSync, setLastSync] = useState<Date | null>(null), previousCalled = useRef(new Set<string>()), calledInitialized = useRef(false);
   const [audioEnabled, setAudioEnabled] = useState(false), [bgmEnabled, setBgmEnabled] = useState(true), [testingFull, setTestingFull] = useState(false), [audioStatus, setAudioStatus] = useState(`音声は停止中です・${volumeLabel()}`);
-  const bgmRef = useRef<HTMLAudioElement | null>(null), audioQueue = useRef(Promise.resolve()), audioEnabledRef = useRef(false), bgmEnabledRef = useRef(true);
+  const bgmRef = useRef<HTMLAudioElement | null>(null), bgmContextRef = useRef<AudioContext | null>(null), bgmGainRef = useRef<GainNode | null>(null), bgmSourceRef = useRef<MediaElementAudioSourceNode | null>(null), audioQueue = useRef(Promise.resolve()), audioEnabledRef = useRef(false), bgmEnabledRef = useRef(true);
 
   function bgmVolume() {
     return entryBgmVolume();
   }
 
+  function createBgm() {
+    const audio = new Audio(); audio.crossOrigin = "anonymous"; audio.src = OLD_BGM_URL; audio.loop = true; audio.preload = "auto"; return audio;
+  }
+
+  async function prepareBgm(audio: HTMLAudioElement) {
+    if (!("AudioContext" in window) && !("webkitAudioContext" in window)) { audio.volume = bgmVolume(); return; }
+    if (!bgmContextRef.current) {
+      const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      const context = new AudioContextClass(), gain = context.createGain(), source = context.createMediaElementSource(audio);
+      source.connect(gain); gain.connect(context.destination); bgmContextRef.current = context; bgmGainRef.current = gain; bgmSourceRef.current = source;
+    }
+    if (bgmContextRef.current.state === "suspended") await bgmContextRef.current.resume();
+    setBgmVolume(bgmVolume());
+  }
+
+  function setBgmVolume(value: number) {
+    if (bgmGainRef.current) { bgmGainRef.current.gain.value = value; if (bgmRef.current) bgmRef.current.volume = 1; }
+    else if (bgmRef.current) bgmRef.current.volume = value;
+  }
+
   async function enableAudio() {
-    const bgm = bgmRef.current ?? new Audio(OLD_BGM_URL);
-    bgm.loop = true; bgm.preload = "auto"; bgm.volume = bgmVolume(); bgmRef.current = bgm;
+    const bgm = bgmRef.current ?? createBgm(); bgmRef.current = bgm;
     try {
+      await prepareBgm(bgm);
       if (bgmEnabled) await bgm.play();
       audioEnabledRef.current = true; setAudioEnabled(true); setAudioStatus(`音声・BGM 稼働中・${volumeLabel()}`);
     } catch { audioEnabledRef.current = true; setAudioEnabled(true); setAudioStatus(`呼出音声は稼働中・${volumeLabel()}`); }
@@ -53,15 +73,14 @@ export default function KitchenBoard({ displayOnly = false }: { displayOnly?: bo
     const next = !bgmEnabledRef.current; bgmEnabledRef.current = next; setBgmEnabled(next);
     const bgm = bgmRef.current;
     if (!bgm) return;
-    if (next) { bgm.volume = bgmVolume(); void bgm.play(); } else bgm.pause();
+    if (next) { setBgmVolume(bgmVolume()); void bgm.play(); } else bgm.pause();
   }
 
   async function testFullVolume() {
-    const bgm = bgmRef.current ?? new Audio(OLD_BGM_URL);
-    bgm.loop = true; bgm.preload = "auto"; bgmRef.current = bgm; bgm.volume = 1;
+    const bgm = bgmRef.current ?? createBgm(); bgmRef.current = bgm;
     try {
-      setTestingFull(true); setAudioStatus("BGM 100% テスト中（3秒で自動復帰）"); await bgm.play();
-      window.setTimeout(() => { bgm.volume = bgmVolume(); setTestingFull(false); setAudioStatus(`音声・BGM 稼働中・${volumeLabel()}`); }, 3000);
+      await prepareBgm(bgm); setBgmVolume(1); setTestingFull(true); setAudioStatus("BGM 100% テスト中（3秒で自動復帰）"); await bgm.play();
+      window.setTimeout(() => { setBgmVolume(bgmVolume()); setTestingFull(false); setAudioStatus(`音声・BGM 稼働中・${volumeLabel()}`); }, 3000);
     } catch { setTestingFull(false); setAudioStatus("100%テストを開始できませんでした"); }
   }
 
@@ -70,9 +89,9 @@ export default function KitchenBoard({ displayOnly = false }: { displayOnly?: bo
     const label = `${item.department === "FOOD" ? "フード" : "ドリンク"} ${String(item.callNumber).padStart(3, "0")}`;
     audioQueue.current = audioQueue.current.then(async () => {
       setAudioStatus(`放送中：${label}`);
-      if (bgmRef.current && bgmEnabledRef.current) bgmRef.current.volume = Math.min(bgmVolume(), BGM_DUCK_VOLUME);
+      if (bgmRef.current && bgmEnabledRef.current) setBgmVolume(Math.min(bgmVolume(), BGM_DUCK_VOLUME));
       await playLegacyCall(item);
-      if (bgmRef.current && bgmEnabledRef.current) bgmRef.current.volume = bgmVolume();
+      if (bgmRef.current && bgmEnabledRef.current) setBgmVolume(bgmVolume());
       setAudioStatus(`音声・BGM 稼働中・${volumeLabel()}`);
     });
   }
@@ -93,7 +112,7 @@ export default function KitchenBoard({ displayOnly = false }: { displayOnly?: bo
   }
 
   useEffect(() => { void load(); const timer = window.setInterval(() => void load(true), 4000); return () => window.clearInterval(timer); }, []);
-  useEffect(() => { const timer = window.setInterval(() => { if (bgmRef.current && bgmEnabledRef.current) bgmRef.current.volume = bgmVolume(); }, 30000); return () => window.clearInterval(timer); }, []);
+  useEffect(() => { const timer = window.setInterval(() => { if (bgmRef.current && bgmEnabledRef.current) setBgmVolume(bgmVolume()); }, 30000); return () => window.clearInterval(timer); }, []);
 
   async function act(item: Fulfillment, action: "START" | "READY" | "CALL" | "PICKUP") {
     setUpdating(item.id); setMessage("");
