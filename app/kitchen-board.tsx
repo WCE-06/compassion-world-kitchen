@@ -7,7 +7,7 @@ import CookingMaster from "./cooking-master";
 type Department = "FOOD" | "DRINK";
 type Status = "ACCEPTED" | "COOKING" | "READY" | "CALLED" | "PICKED_UP" | "CANCELLED";
 type Fulfillment = { id: string; orderId: string; department: Department; callNumber: number; status: Status; readyAt: number | null; estimatedReadyAt?: number | null; calledAt: number | null; updatedAt: number; items: { name: string; quantity: number; options?: string[] }[] };
-type Screen = "ORDERS" | "CALL_MONITOR" | "MENU" | "MASTER";
+type Screen = "ORDERS" | "CALL_MONITOR" | "HISTORY" | "ANNOUNCEMENTS" | "MENU" | "MASTER";
 
 const statusLabel: Record<Status, string> = { ACCEPTED: "未着手", COOKING: "調理中", READY: "完成", CALLED: "呼出中", PICKED_UP: "受渡済み", CANCELLED: "取消" };
 const actionByStatus: Partial<Record<Status, { action: "START" | "READY" | "CALL" | "PICKUP"; label: string }>> = {
@@ -31,6 +31,7 @@ export default function KitchenBoard({ displayOnly = false }: { displayOnly?: bo
   const [screen, setScreen] = useState<Screen>(displayOnly ? "CALL_MONITOR" : "ORDERS");
   const [department, setDepartment] = useState<Department>("FOOD");
   const [data, setData] = useState<Record<Department, Fulfillment[]>>({ FOOD: [], DRINK: [] });
+  const [history, setHistory] = useState<Fulfillment[]>([]);
   const [loading, setLoading] = useState(true), [message, setMessage] = useState(""), [updating, setUpdating] = useState<string | null>(null);
   const [lastSync, setLastSync] = useState<Date | null>(null), previousCalled = useRef(new Set<string>()), calledInitialized = useRef(false);
   const [audioEnabled, setAudioEnabled] = useState(false), [bgmEnabled, setBgmEnabled] = useState(true), [testingFull, setTestingFull] = useState(false), [audioStatus, setAudioStatus] = useState(`音声は停止中です・${volumeLabel()}`);
@@ -96,17 +97,25 @@ export default function KitchenBoard({ displayOnly = false }: { displayOnly?: bo
     });
   }
 
+  function broadcast(title: string, text: string) {
+    if (!audioEnabledRef.current) { setAudioStatus("館内放送の前に『音声・BGMを開始』を押してください"); return; }
+    audioQueue.current = audioQueue.current.then(async () => {
+      setAudioStatus(`館内放送中：${title}`); if (bgmRef.current && bgmEnabledRef.current) setBgmVolume(Math.min(bgmVolume(), BGM_DUCK_VOLUME));
+      playLegacyChime(); await wait(650); await speak(text); if (bgmRef.current && bgmEnabledRef.current) setBgmVolume(bgmVolume()); setAudioStatus(`音声・BGM 稼働中・${volumeLabel()}`);
+    });
+  }
+
   async function load(silent = false) {
     if (!silent) setLoading(true);
     try {
-      const [foodResponse, drinkResponse] = await Promise.all(["FOOD", "DRINK"].map((value) => fetch(`/api/v1/kitchen/fulfillments?department=${value}`, { cache: "no-store" })));
-      const [food, drink] = await Promise.all([foodResponse.json(), drinkResponse.json()]);
+      const [foodResponse, drinkResponse, foodHistoryResponse, drinkHistoryResponse] = await Promise.all([fetch("/api/v1/kitchen/fulfillments?department=FOOD", { cache: "no-store" }), fetch("/api/v1/kitchen/fulfillments?department=DRINK", { cache: "no-store" }), fetch("/api/v1/kitchen/fulfillments?department=FOOD&history=true", { cache: "no-store" }), fetch("/api/v1/kitchen/fulfillments?department=DRINK&history=true", { cache: "no-store" })]);
+      const [food, drink, foodHistory, drinkHistory] = await Promise.all([foodResponse.json(), drinkResponse.json(), foodHistoryResponse.json(), drinkHistoryResponse.json()]);
       if (!foodResponse.ok || !drinkResponse.ok) throw new Error(food.error ?? drink.error ?? "注文を取得できませんでした");
       const next = { FOOD: food.fulfillments ?? [], DRINK: drink.fulfillments ?? [] } as Record<Department, Fulfillment[]>;
       const called = new Set([...next.FOOD, ...next.DRINK].filter((item) => item.status === "CALLED").map((item) => item.id));
       if (!displayOnly && calledInitialized.current) [...next.FOOD, ...next.DRINK].filter((item) => item.status === "CALLED" && !previousCalled.current.has(item.id)).forEach(announce);
       calledInitialized.current = true;
-      previousCalled.current = called; setData(next); setLastSync(new Date()); setMessage("");
+      previousCalled.current = called; setData(next); if (foodHistoryResponse.ok && drinkHistoryResponse.ok) setHistory([...(foodHistory.fulfillments ?? []), ...(drinkHistory.fulfillments ?? [])].sort((a: Fulfillment, b: Fulfillment) => b.updatedAt - a.updatedAt)); setLastSync(new Date()); setMessage("");
     } catch (error) { setMessage(error instanceof Error ? friendly(error.message) : "注文情報へ接続できませんでした"); }
     finally { setLoading(false); }
   }
@@ -114,12 +123,12 @@ export default function KitchenBoard({ displayOnly = false }: { displayOnly?: bo
   useEffect(() => { void load(); const timer = window.setInterval(() => void load(true), 4000); return () => window.clearInterval(timer); }, []);
   useEffect(() => { const timer = window.setInterval(() => { if (bgmRef.current && bgmEnabledRef.current) setBgmVolume(bgmVolume()); }, 30000); return () => window.clearInterval(timer); }, []);
 
-  async function act(item: Fulfillment, action: "START" | "READY" | "CALL" | "PICKUP") {
+  async function act(item: Fulfillment, action: "START" | "READY" | "CALL" | "PICKUP" | "RESTORE_CALL") {
     setUpdating(item.id); setMessage("");
     try {
       const response = await fetch("/api/v1/kitchen/fulfillments", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fulfillmentId: item.id, action }) });
       const body = await response.json(); if (!response.ok) throw new Error(body.error ?? "状態を更新できませんでした");
-      if (action === "CALL") { previousCalled.current.add(item.id); announce(item); } await load(true);
+      if (action === "CALL" || action === "RESTORE_CALL") { previousCalled.current.add(item.id); announce(item); } await load(true);
     } catch (error) { setMessage(error instanceof Error ? friendly(error.message) : "状態を更新できませんでした"); }
     finally { setUpdating(null); }
   }
@@ -132,11 +141,11 @@ export default function KitchenBoard({ displayOnly = false }: { displayOnly?: bo
   return <main className={`board-shell ${screen === "CALL_MONITOR" ? "call-screen" : ""} ${displayOnly ? "display-only" : ""}`}>
     {!displayOnly && <header className="topbar">
       <div className="brand"><span className="brand-mark">CW</span><div><b>COMPASSION WORLD</b><span>KITCHEN MONITOR</span></div></div>
-      <nav className="main-nav" aria-label="管理画面"><button className={screen === "ORDERS" ? "active" : ""} onClick={() => setScreen("ORDERS")}>注文管理</button><button className={screen === "CALL_MONITOR" ? "active" : ""} onClick={() => setScreen("CALL_MONITOR")}>呼出モニター</button><button className={screen === "MASTER" ? "active" : ""} onClick={() => setScreen("MASTER")}>調理マスタ</button><button className={screen === "MENU" ? "active" : ""} onClick={() => setScreen("MENU")}>メニュー管理</button></nav>
+      <nav className="main-nav" aria-label="管理画面"><button className={screen === "ORDERS" ? "active" : ""} onClick={() => setScreen("ORDERS")}>注文管理</button><button className={screen === "CALL_MONITOR" ? "active" : ""} onClick={() => setScreen("CALL_MONITOR")}>呼出モニター</button><button className={screen === "HISTORY" ? "active" : ""} onClick={() => setScreen("HISTORY")}>履歴</button><button className={screen === "ANNOUNCEMENTS" ? "active" : ""} onClick={() => setScreen("ANNOUNCEMENTS")}>館内放送</button><button className={screen === "MASTER" ? "active" : ""} onClick={() => setScreen("MASTER")}>調理マスタ</button><button className={screen === "MENU" ? "active" : ""} onClick={() => setScreen("MENU")}>メニュー管理</button></nav>
       <div className="connection"><span className="pulse" /> {message ? "接続確認中" : "接続中"} <b>{lastSync?.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" }) ?? "--:--"}</b></div>
     </header>}
 
-    {screen === "MENU" ? <MenuManager /> : screen === "MASTER" ? <CookingMaster /> : screen === "CALL_MONITOR" ? <section className="customer-call-monitor">
+    {screen === "MENU" ? <MenuManager /> : screen === "MASTER" ? <CookingMaster /> : screen === "HISTORY" ? <section className="history-workspace"><div className="workspace-head"><div><p>FULFILLMENT HISTORY</p><h1>当日の受渡履歴</h1><small>誤操作した注文を呼出中へ戻し、顧客モニターへ再表示できます</small></div></div><div className="history-list">{history.length ? history.map((item) => <article key={item.id}><div className={`history-number ${item.department.toLowerCase()}`}><small>{item.department === "FOOD" ? "フード" : "ドリンク"}</small><strong>{String(item.callNumber).padStart(3, "0")}</strong></div><div><b>{item.items.map((entry) => `${entry.name} ×${entry.quantity}`).join("、")}</b><span>{new Date(item.updatedAt).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" })}・{item.status === "PICKED_UP" ? "受渡完了" : "取消"}</span></div>{item.status === "PICKED_UP" && <button disabled={updating === item.id} onClick={() => void act(item, "RESTORE_CALL")}>呼出中へ戻して再呼出</button>}</article>) : <p className="history-empty">本日の受渡履歴はまだありません</p>}</div></section> : screen === "ANNOUNCEMENTS" ? <section className="announcement-workspace"><div className="workspace-head"><div><p>STORE ANNOUNCEMENTS</p><h1>館内放送</h1><small>放送前に上部の「音声・BGMを開始」を押してください</small></div></div><div className="announcement-grid">{[{title:"営業開始",tag:"OPEN",text:"おはようございます。本日も、Aozora Kitchenをご利用いただき、誠にありがとうございます。ただいまより営業を開始いたします。皆さまのご利用を心よりお待ちしております。"},{title:"ラストオーダー",tag:"LAST ORDER",text:"ご来館中のお客様にご案内いたします。Aozora Kitchenは、まもなくラストオーダーのお時間となります。ご注文予定のお客様は、お早めにご利用ください。"},{title:"営業終了",tag:"CLOSE",text:"ご来館中のお客様にご案内いたします。本日のAozora Kitchenの営業は終了いたしました。本日もご利用いただき、誠にありがとうございました。"}].map((item) => <article key={item.tag}><span>{item.tag}</span><h2>{item.title}</h2><p>{item.text}</p><button onClick={() => broadcast(item.title, item.text)}>▶ この放送を流す</button></article>)}</div></section> : screen === "CALL_MONITOR" ? <section className="customer-call-monitor">
       <header><p>AOZORA KITCHEN</p><h1>ご注文状況</h1><span>お呼び出し中に番号が表示されましたら、受取カウンターへお越しください</span></header>
       <div className="call-status-board">
         <section className="call-lane preparing"><header><span>ただいま</span><h2>調理中</h2></header><div className="call-number-list">{preparing.length ? preparing.map((item) => <div className={item.department.toLowerCase()} key={item.id}><small>{item.department === "FOOD" ? "フード" : "ドリンク"}{item.estimatedReadyAt && <em>{clock(item.estimatedReadyAt)}ごろ</em>}</small><strong>{String(item.callNumber).padStart(3, "0")}</strong></div>) : <p>現在、調理中のご注文はありません</p>}</div></section>

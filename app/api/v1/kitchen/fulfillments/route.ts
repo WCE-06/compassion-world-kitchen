@@ -12,7 +12,9 @@ async function forward(request: NextRequest, method: "GET" | "PATCH") {
   if (!runtime.KITCHEN_API_TOKEN) return NextResponse.json({ error: "KITCHEN_API_NOT_CONFIGURED" }, { status: 503 });
   const base = runtime.MEMBERS_API_BASE_URL ?? "https://compassion-world-members-card.combetter27.chatgpt.site";
   const department = request.nextUrl.searchParams.get("department");
-  const target = `${base}/api/v1/kitchen/fulfillments${department ? `?department=${encodeURIComponent(department)}` : ""}`;
+  const history = request.nextUrl.searchParams.get("history");
+  const query = new URLSearchParams(); if (department) query.set("department", department); if (history === "true") query.set("history", "true");
+  const target = `${base}/api/v1/kitchen/fulfillments${query.size ? `?${query}` : ""}`;
   try {
     const response = await fetch(target, {
       method,
