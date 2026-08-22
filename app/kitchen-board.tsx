@@ -6,7 +6,7 @@ import CookingMaster from "./cooking-master";
 
 type Department = "FOOD" | "DRINK";
 type Status = "ACCEPTED" | "COOKING" | "READY" | "CALLED" | "PICKED_UP" | "CANCELLED";
-type Fulfillment = { id: string; orderId: string; department: Department; callNumber: number; status: Status; readyAt: number | null; calledAt: number | null; updatedAt: number; items: { name: string; quantity: number; options?: string[] }[] };
+type Fulfillment = { id: string; orderId: string; department: Department; callNumber: number; status: Status; readyAt: number | null; estimatedReadyAt?: number | null; calledAt: number | null; updatedAt: number; items: { name: string; quantity: number; options?: string[] }[] };
 type Screen = "ORDERS" | "CALL_MONITOR" | "MENU" | "MASTER";
 
 const statusLabel: Record<Status, string> = { ACCEPTED: "未着手", COOKING: "調理中", READY: "完成", CALLED: "呼出中", PICKED_UP: "受渡済み", CANCELLED: "取消" };
@@ -105,7 +105,7 @@ export default function KitchenBoard({ displayOnly = false }: { displayOnly?: bo
     {screen === "MENU" ? <MenuManager /> : screen === "MASTER" ? <CookingMaster /> : screen === "CALL_MONITOR" ? <section className="customer-call-monitor">
       <header><p>COMPASSION WORLD</p><h1>ご注文状況</h1><span>お呼び出し中に番号が表示されましたら、受取カウンターへお越しください</span></header>
       <div className="call-status-board">
-        <section className="call-lane preparing"><header><span>ただいま</span><h2>調理中</h2></header><div className="call-number-list">{preparing.length ? preparing.map((item) => <div className={item.department.toLowerCase()} key={item.id}><small>{item.department === "FOOD" ? "フード" : "ドリンク"}</small><strong>{String(item.callNumber).padStart(3, "0")}</strong></div>) : <p>現在、調理中のご注文はありません</p>}</div></section>
+        <section className="call-lane preparing"><header><span>ただいま</span><h2>調理中</h2></header><div className="call-number-list">{preparing.length ? preparing.map((item) => <div className={item.department.toLowerCase()} key={item.id}><small>{item.department === "FOOD" ? "フード" : "ドリンク"}{item.estimatedReadyAt && <em>{clock(item.estimatedReadyAt)}ごろ</em>}</small><strong>{String(item.callNumber).padStart(3, "0")}</strong></div>) : <p>現在、調理中のご注文はありません</p>}</div></section>
         <section className="call-lane completed"><header><span>できあがりました</span><h2>お呼び出し中</h2></header><div className="call-number-list">{called.length ? called.map((item) => <div className={item.department.toLowerCase()} key={item.id}><small>{item.department === "FOOD" ? "フード" : "ドリンク"}</small><strong>{String(item.callNumber).padStart(3, "0")}</strong></div>) : <p>完成した番号がここに表示されます</p>}</div></section>
       </div>
     </section> : <>
@@ -118,7 +118,7 @@ export default function KitchenBoard({ displayOnly = false }: { displayOnly?: bo
         {!loading && !current.length && <div className="empty-menu">現在、{department === "FOOD" ? "フード" : "ドリンク"}の待ち注文はありません。</div>}
         {current.map((item) => { const action = actionByStatus[item.status]; return <article className={`order-card status-${item.status.toLowerCase()} department-${item.department.toLowerCase()}`} key={item.id}>
           <div className="card-head"><div><span className="order-kicker">{item.department === "FOOD" ? "フード呼出番号" : "ドリンク呼出番号"}</span><h2>{String(item.callNumber).padStart(3, "0")}</h2></div><span className="status-chip">{statusLabel[item.status]}</span></div>
-          <div className="meta-row"><span>{item.department === "FOOD" ? "フード" : "ドリンク"}</span><span>決済済み</span><span>{elapsed(item.updatedAt)}</span></div>
+          <div className="meta-row"><span>{item.department === "FOOD" ? "フード" : "ドリンク"}</span><span>決済済み</span><span>{item.estimatedReadyAt ? `提供予定 ${clock(item.estimatedReadyAt)}` : "提供予定 できあがり次第"}</span><span>{elapsed(item.updatedAt)}</span></div>
           <div className="items">{item.items.map((product, index) => <div className="item" key={`${item.id}-${index}`}><strong className="quantity">{product.quantity}</strong><div><h3>{product.name}</h3>{product.options?.map((option) => <p key={option}>↳ {option}</p>)}</div></div>)}</div>
           {action && <div className="card-actions">{item.status === "CALLED" && <button className="recall" onClick={() => announce(item)}>♩ 再呼出</button>}<button className="advance" disabled={updating === item.id} onClick={() => void act(item, action.action)}>{updating === item.id ? "更新中…" : action.label} <span>→</span></button></div>}
         </article>; })}
@@ -128,6 +128,7 @@ export default function KitchenBoard({ displayOnly = false }: { displayOnly?: bo
 }
 
 function elapsed(time: number) { const minutes = Math.max(0, Math.floor((Date.now() - time) / 60000)); return minutes < 1 ? "たった今" : `${minutes}分経過`; }
+function clock(time:number){return new Intl.DateTimeFormat("ja-JP",{hour:"2-digit",minute:"2-digit"}).format(new Date(time));}
 function friendly(message: string) { if (message.includes("UNAUTHORIZED")) return "会員証システムとの認証設定を確認してください"; if (message.includes("UNAVAILABLE")) return "会員証システムへ接続できません"; if (message.includes("INVALID_STATUS_TRANSITION")) return "別の端末で状態が更新されました"; return message; }
 async function playLegacyCall(item: Fulfillment) {
   playLegacyChime(); await wait(650);

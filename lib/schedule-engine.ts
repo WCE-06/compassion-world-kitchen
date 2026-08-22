@@ -1,10 +1,13 @@
 export type ServingMode = "WITH_FOOD" | "AS_SOON_AS_POSSIBLE" | "DRINK_FIRST";
-export type EstimateItem = { productId?: string; productCode?: string; name?: string; quantity: number; department?: "FOOD" | "DRINK"; options?: unknown[] };
+export type EstimateItem = { productId?: string; productCode?: string; name?: string; quantity: number; department?: "FOOD" | "DRINK"; preparationMinutes?: number; options?: { preparationMinutesDelta?: number }[] };
 export type EstimateInput = { requestId: string; orderId?: string; items: EstimateItem[]; orderedAt?: string; servingMode?: ServingMode; serviceType?: "EAT_IN" | "TAKEOUT"; kitchen?: { activeFoodOrders?: number; fryerBatches?: number; microwaveContainers?: number } };
 
 export const CALCULATION_VERSION = "aok-v1.0";
 
 function foodMinutes(item: EstimateItem) {
+  const configured = Number(item.preparationMinutes);
+  const optionDelta = Array.isArray(item.options) ? item.options.reduce((sum, option) => sum + (Number.isFinite(Number(option?.preparationMinutesDelta)) ? Number(option.preparationMinutesDelta) : 0), 0) : 0;
+  if (Number.isFinite(configured) && configured > 0) return Math.max(1, configured + optionDelta);
   const text = `${item.productCode ?? ""} ${item.name ?? ""}`.toLowerCase();
   if (/ほうとう|houtou/.test(text)) return 15;
   if (/うどん|udon/.test(text)) return 10;
