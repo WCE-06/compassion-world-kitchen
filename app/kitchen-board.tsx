@@ -33,7 +33,7 @@ export default function KitchenBoard({ displayOnly = false }: { displayOnly?: bo
   const [data, setData] = useState<Record<Department, Fulfillment[]>>({ FOOD: [], DRINK: [] });
   const [loading, setLoading] = useState(true), [message, setMessage] = useState(""), [updating, setUpdating] = useState<string | null>(null);
   const [lastSync, setLastSync] = useState<Date | null>(null), previousCalled = useRef(new Set<string>()), calledInitialized = useRef(false);
-  const [audioEnabled, setAudioEnabled] = useState(false), [bgmEnabled, setBgmEnabled] = useState(true), [audioStatus, setAudioStatus] = useState(`音声は停止中です・${volumeLabel()}`);
+  const [audioEnabled, setAudioEnabled] = useState(false), [bgmEnabled, setBgmEnabled] = useState(true), [testingFull, setTestingFull] = useState(false), [audioStatus, setAudioStatus] = useState(`音声は停止中です・${volumeLabel()}`);
   const bgmRef = useRef<HTMLAudioElement | null>(null), audioQueue = useRef(Promise.resolve()), audioEnabledRef = useRef(false), bgmEnabledRef = useRef(true);
 
   function bgmVolume() {
@@ -54,6 +54,15 @@ export default function KitchenBoard({ displayOnly = false }: { displayOnly?: bo
     const bgm = bgmRef.current;
     if (!bgm) return;
     if (next) { bgm.volume = bgmVolume(); void bgm.play(); } else bgm.pause();
+  }
+
+  async function testFullVolume() {
+    const bgm = bgmRef.current ?? new Audio(OLD_BGM_URL);
+    bgm.loop = true; bgm.preload = "auto"; bgmRef.current = bgm; bgm.volume = 1;
+    try {
+      setTestingFull(true); setAudioStatus("BGM 100% テスト中（3秒で自動復帰）"); await bgm.play();
+      window.setTimeout(() => { bgm.volume = bgmVolume(); setTestingFull(false); setAudioStatus(`音声・BGM 稼働中・${volumeLabel()}`); }, 3000);
+    } catch { setTestingFull(false); setAudioStatus("100%テストを開始できませんでした"); }
   }
 
   function announce(item: Fulfillment) {
@@ -115,7 +124,7 @@ export default function KitchenBoard({ displayOnly = false }: { displayOnly?: bo
         <section className="call-lane completed"><header><span>できあがりました</span><h2>お呼び出し中</h2></header><div className="call-number-list">{called.length ? called.map((item) => <div className={item.department.toLowerCase()} key={item.id}><small>{item.department === "FOOD" ? "フード" : "ドリンク"}</small><strong>{String(item.callNumber).padStart(3, "0")}</strong></div>) : <p>完成した番号がここに表示されます</p>}</div></section>
       </div>
     </section> : <>
-      <div className="staff-audio-bar"><div><b>呼出音声・店内BGM</b><span>{audioStatus}</span></div><button className={audioEnabled ? "enabled" : ""} onClick={() => void enableAudio()}>{audioEnabled ? "音声 有効 ✓" : "▶ 音声・BGMを開始"}</button><button className="bgm-toggle" disabled={!audioEnabled} onClick={toggleBgm}>{bgmEnabled ? "BGM ON" : "BGM OFF"}</button></div>
+      <div className="staff-audio-bar"><div><b>呼出音声・店内BGM</b><span>{audioStatus}</span></div><button className={audioEnabled ? "enabled" : ""} onClick={() => void enableAudio()}>{audioEnabled ? "音声 有効 ✓" : "▶ 音声・BGMを開始"}</button><button className="bgm-toggle" disabled={!audioEnabled || testingFull} onClick={toggleBgm}>{bgmEnabled ? "BGM ON" : "BGM OFF"}</button><button className="volume-test" disabled={testingFull} onClick={() => void testFullVolume()}>{testingFull ? "100%テスト中…" : "100%を3秒テスト"}</button></div>
       <section className="summary" aria-label="注文サマリー"><div><span>未着手</span><strong>{count("ACCEPTED")}</strong></div><div><span>調理中</span><strong>{count("COOKING")}</strong></div><div><span>完成</span><strong className="ready-number">{count("READY")}</strong></div><div><span>呼出中</span><strong>{count("CALLED")}</strong></div></section>
       <div className="department-tabs"><button className={department === "FOOD" ? "active food" : ""} onClick={() => setDepartment("FOOD")}>フード <b>{data.FOOD.length}</b></button><button className={department === "DRINK" ? "active drink" : ""} onClick={() => setDepartment("DRINK")}>ドリンク <b>{data.DRINK.length}</b></button><span>4秒ごとに自動更新</span></div>
       {message && <p className="form-notice error">{message}</p>}
