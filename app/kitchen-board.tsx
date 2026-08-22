@@ -19,13 +19,13 @@ const BGM_DUCK_VOLUME = 0.04;
 
 function scheduledVolume() {
   const now = new Date(), minutes = now.getHours() * 60 + now.getMinutes();
-  if (minutes >= 2 * 60 && minutes < 8 * 60) return 0.001;
+  if (minutes >= 2 * 60 && minutes < 8 * 60) return 0.0000001;
   if (minutes >= 22 * 60 + 30 || minutes < 2 * 60) return 0.10;
   if (minutes >= 21 * 60 + 30) return 0.175;
   return 0.25;
 }
 
-function volumeLabel() { const percent = scheduledVolume() * 100; return `現在の時間帯音量 ${percent < 1 ? percent.toFixed(1) : Math.round(percent)}%`; }
+function volumeLabel() { const percent = scheduledVolume() * 100; const shown = percent < 0.001 ? percent.toFixed(5) : percent < 1 ? percent.toFixed(1) : Math.round(percent); return `現在の時間帯音量 ${shown}%`; }
 
 export default function KitchenBoard({ displayOnly = false }: { displayOnly?: boolean }) {
   const [screen, setScreen] = useState<Screen>(displayOnly ? "CALL_MONITOR" : "ORDERS");
@@ -144,5 +144,5 @@ async function playLegacyCall(item: Fulfillment) {
   playLegacyChime(); await wait(650);
 }
 function speak(text: string) { return new Promise<void>((resolve) => { if (!("speechSynthesis" in window)) { resolve(); return; } const utterance = new SpeechSynthesisUtterance(text); utterance.lang = "ja-JP"; utterance.rate = .88; utterance.pitch = 1; utterance.volume = scheduledVolume(); const voices = window.speechSynthesis.getVoices(); utterance.voice = voices.find((voice) => voice.lang.startsWith("ja")) ?? null; utterance.onend = () => resolve(); utterance.onerror = () => resolve(); window.speechSynthesis.speak(utterance); }); }
-function playLegacyChime() { try { const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext; const context = new AudioContextClass(), peak = .13 * scheduledVolume(); [659, 784, 988].forEach((frequency, index) => { const oscillator = context.createOscillator(), gain = context.createGain(), start = context.currentTime + index * .14; oscillator.type = "sine"; oscillator.frequency.value = frequency; gain.gain.setValueAtTime(.00001, start); gain.gain.exponentialRampToValueAtTime(peak, start + .02); gain.gain.exponentialRampToValueAtTime(.00001, start + .32); oscillator.connect(gain); gain.connect(context.destination); oscillator.start(start); oscillator.stop(start + .34); }); } catch { /* 表示は継続 */ } }
+function playLegacyChime() { try { const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext; const context = new AudioContextClass(), peak = .13 * scheduledVolume(), floor = Math.max(0.0000000001, peak / 1000); [659, 784, 988].forEach((frequency, index) => { const oscillator = context.createOscillator(), gain = context.createGain(), start = context.currentTime + index * .14; oscillator.type = "sine"; oscillator.frequency.value = frequency; gain.gain.setValueAtTime(floor, start); gain.gain.exponentialRampToValueAtTime(peak, start + .02); gain.gain.exponentialRampToValueAtTime(floor, start + .32); oscillator.connect(gain); gain.connect(context.destination); oscillator.start(start); oscillator.stop(start + .34); }); } catch { /* 表示は継続 */ } }
 function wait(ms: number) { return new Promise((resolve) => window.setTimeout(resolve, ms)); }
