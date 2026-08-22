@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getChatGPTUser } from "@/app/chatgpt-auth";
 import { createSmaregiProduct, getSmaregiCatalog, type SmaregiProductInput } from "@/lib/smaregi";
+import { getSharedCatalog } from "@/lib/shared-catalog";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   if (!await getChatGPTUser()) return NextResponse.json({ error: "LOGIN_REQUIRED" }, { status: 401 });
   try {
+    const shared = await getSharedCatalog();
+    if (shared) return NextResponse.json(shared, { headers: { "Cache-Control": "no-store" } });
     return NextResponse.json(await getSmaregiCatalog(), { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "SMAREGI_ERROR" }, { status: 502 });

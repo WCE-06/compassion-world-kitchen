@@ -10,13 +10,17 @@ type MenuItem = {
   category: "FOOD" | "DRINK";
   smaregiCategoryId: string;
   image?: string;
+  soldOut?: boolean;
   status: "PUBLISHED" | "DRAFT";
 };
 type Category = { categoryId: string; categoryName: string };
 type CatalogResponse = {
-  products?: { productId: string; categoryId: string; productCode: string; productName: string; price: string }[];
+  products?: { productId: string; categoryId: string; productCode: string; productName: string; price: string; imageUrl?: string; soldOut?: boolean }[];
   categories?: Category[];
   environment?: "sandbox" | "production";
+  source?: "shared-catalog";
+  readOnly?: boolean;
+  syncedAt?: string | null;
   error?: string;
 };
 
@@ -28,6 +32,8 @@ export default function MenuManager() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [environment, setEnvironment] = useState<"sandbox" | "production">("sandbox");
+  const [sharedCatalog, setSharedCatalog] = useState(false);
+  const [syncedAt, setSyncedAt] = useState<string | null>(null);
   const libraryInput = useRef<HTMLInputElement>(null);
   const cameraInput = useRef<HTMLInputElement>(null);
 
@@ -40,6 +46,8 @@ export default function MenuManager() {
       if (!response.ok) throw new Error(body.error ?? "商品を取得できませんでした");
       setCategories(body.categories ?? []);
       setEnvironment(body.environment ?? "sandbox");
+      setSharedCatalog(body.source === "shared-catalog");
+      setSyncedAt(body.syncedAt ?? null);
       setMenus((body.products ?? []).map((item) => ({
         id: item.productId,
         name: item.productName,
@@ -47,6 +55,8 @@ export default function MenuManager() {
         price: Number(item.price),
         category: "FOOD",
         smaregiCategoryId: item.categoryId,
+        image: item.imageUrl || undefined,
+        soldOut: item.soldOut,
         status: "PUBLISHED",
       })));
     } catch (error) {
@@ -152,18 +162,19 @@ export default function MenuManager() {
     <section className="menu-workspace">
       <div className="workspace-head">
         <div><p>MENU MANAGEMENT</p><h1>メニュー管理</h1><small>スマレジ商品マスタとリアルタイム同期</small></div>
-        <div className="menu-head-actions"><span className={`live-badge ${loading ? "loading" : ""}`}>{loading ? "同期中" : `● スマレジ ${environment === "sandbox" ? "開発環境" : "本番環境"}`}</span><button className="new-menu" disabled={loading || categories.length === 0} onClick={() => openForm()}>＋ 新メニュー追加</button></div>
+        <div className="menu-head-actions"><span className={`live-badge ${loading ? "loading" : ""}`}>{loading ? "同期中" : `● スマレジ ${environment === "sandbox" ? "開発環境" : "本番マスタ"}`}</span><button className="new-menu" disabled={loading || categories.length === 0 || sharedCatalog} onClick={() => openForm()}>＋ 新メニュー追加</button></div>
       </div>
+      {sharedCatalog && <p className="saved-notice">スマレジ本番商品 {menus.length.toLocaleString("ja-JP")}件を同期済み{syncedAt ? `（${new Date(syncedAt).toLocaleString("ja-JP")}）` : ""}。登録・修正は本番の書き込み認証を接続後に有効になります。</p>}
       {notice && <p className={notice.includes("エラー") ? "form-notice error" : "saved-notice"}>{notice}</p>}
       <div className="menu-table">
         <div className="menu-table-head"><span>商品</span><span>商品コード</span><span>価格</span><span>連携状態</span><span /></div>
         {loading && <div className="empty-menu">スマレジから商品を取得しています…</div>}
         {!loading && menus.length === 0 && <div className="empty-menu">表示できる商品がありません。接続状態を確認してください。</div>}
         {menus.map((item) => <article className="menu-row" key={item.id}>
-          <div className="menu-product"><div className="menu-thumb"><span>POS</span></div><div><b>{item.name}</b><small>{categories.find((category) => category.categoryId === item.smaregiCategoryId)?.categoryName ?? `部門 ${item.smaregiCategoryId}`}</small></div></div>
+          <div className="menu-product"><div className={`menu-thumb ${item.image ? "has-image" : ""}`}>{item.image ? <>{/* eslint-disable-next-line @next/next/no-img-element */}<img src={item.image} alt="" /></> : <span>POS</span>}</div><div><b>{item.name}</b><small>{categories.find((category) => category.categoryId === item.smaregiCategoryId)?.categoryName ?? `部門 ${item.smaregiCategoryId}`}{item.soldOut ? "・売切" : ""}</small></div></div>
           <span>{item.code || "—"}</span><strong>¥{item.price.toLocaleString("ja-JP")}</strong>
           <span className="sync-status">スマレジ連携済</span>
-          <button className="edit-menu" onClick={() => openForm(item)}>商品情報を修正</button>
+          <button className="edit-menu" disabled={sharedCatalog} onClick={() => openForm(item)}>{sharedCatalog ? "参照中" : "商品情報を修正"}</button>
         </article>)}
       </div>
       <button className="reload-catalog" onClick={() => void loadCatalog()} disabled={loading}>↻ スマレジから再取得</button>
