@@ -2,11 +2,12 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import MenuManager from "./menu-manager";
+import CookingMaster from "./cooking-master";
 
 type Department = "FOOD" | "DRINK";
 type Status = "ACCEPTED" | "COOKING" | "READY" | "CALLED" | "PICKED_UP" | "CANCELLED";
 type Fulfillment = { id: string; orderId: string; department: Department; callNumber: number; status: Status; readyAt: number | null; calledAt: number | null; updatedAt: number; items: { name: string; quantity: number; options?: string[] }[] };
-type Screen = "ORDERS" | "CALL_MONITOR" | "MENU";
+type Screen = "ORDERS" | "CALL_MONITOR" | "MENU" | "MASTER";
 
 const statusLabel: Record<Status, string> = { ACCEPTED: "未着手", COOKING: "調理中", READY: "完成", CALLED: "呼出中", PICKED_UP: "受渡済み", CANCELLED: "取消" };
 const actionByStatus: Partial<Record<Status, { action: "START" | "READY" | "CALL" | "PICKUP"; label: string }>> = {
@@ -53,11 +54,11 @@ export default function KitchenBoard() {
   return <main className={`board-shell ${screen === "CALL_MONITOR" ? "call-screen" : ""}`}>
     <header className="topbar">
       <div className="brand"><span className="brand-mark">CW</span><div><b>COMPASSION WORLD</b><span>KITCHEN MONITOR</span></div></div>
-      <nav className="main-nav" aria-label="管理画面"><button className={screen === "ORDERS" ? "active" : ""} onClick={() => setScreen("ORDERS")}>注文管理</button><button className={screen === "CALL_MONITOR" ? "active" : ""} onClick={() => setScreen("CALL_MONITOR")}>呼出モニター</button><button className={screen === "MENU" ? "active" : ""} onClick={() => setScreen("MENU")}>メニュー管理</button></nav>
+      <nav className="main-nav" aria-label="管理画面"><button className={screen === "ORDERS" ? "active" : ""} onClick={() => setScreen("ORDERS")}>注文管理</button><button className={screen === "CALL_MONITOR" ? "active" : ""} onClick={() => setScreen("CALL_MONITOR")}>呼出モニター</button><button className={screen === "MASTER" ? "active" : ""} onClick={() => setScreen("MASTER")}>調理マスタ</button><button className={screen === "MENU" ? "active" : ""} onClick={() => setScreen("MENU")}>メニュー管理</button></nav>
       <div className="connection"><span className="pulse" /> {message ? "接続確認中" : "接続中"} <b>{lastSync?.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" }) ?? "--:--"}</b></div>
     </header>
 
-    {screen === "MENU" ? <MenuManager /> : screen === "CALL_MONITOR" ? <section className="customer-call-monitor">
+    {screen === "MENU" ? <MenuManager /> : screen === "MASTER" ? <CookingMaster /> : screen === "CALL_MONITOR" ? <section className="customer-call-monitor">
       <header><p>COMPASSION WORLD</p><h1>できあがりました</h1><span>番号をご確認のうえ、受取カウンターへお越しください</span></header>
       {called.length ? <div className="called-grid">{called.map((item) => <article className={item.department.toLowerCase()} key={item.id}><small>{item.department === "FOOD" ? "フード" : "ドリンク"}</small><strong>{String(item.callNumber).padStart(3, "0")}</strong><button onClick={() => { playChime(); void act(item, "CALL"); }}>♩ 再呼出</button></article>)}</div> : <div className="call-empty"><b>ただいま準備中です</b><span>完成した番号がここに表示されます</span></div>}
     </section> : <>
