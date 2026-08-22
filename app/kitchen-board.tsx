@@ -28,7 +28,8 @@ export default function KitchenBoard() {
 
   function bgmVolume() {
     const now = new Date(), minutes = now.getHours() * 60 + now.getMinutes();
-    if (minutes >= 22 * 60 + 30 || minutes < 8 * 60) return 0.10;
+    if (minutes >= 2 * 60 && minutes < 8 * 60) return 0.01;
+    if (minutes >= 22 * 60 + 30 || minutes < 2 * 60) return 0.10;
     if (minutes >= 21 * 60 + 30) return 0.175;
     return 0.25;
   }
@@ -77,6 +78,7 @@ export default function KitchenBoard() {
   }
 
   useEffect(() => { void load(); const timer = window.setInterval(() => void load(true), 4000); return () => window.clearInterval(timer); }, []);
+  useEffect(() => { const timer = window.setInterval(() => { if (bgmRef.current && bgmEnabledRef.current) bgmRef.current.volume = bgmVolume(); }, 30000); return () => window.clearInterval(timer); }, []);
 
   async function act(item: Fulfillment, action: "START" | "READY" | "CALL" | "PICKUP") {
     setUpdating(item.id); setMessage("");
