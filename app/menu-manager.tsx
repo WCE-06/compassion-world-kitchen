@@ -18,7 +18,7 @@ type CatalogResponse = {
   products?: { productId: string; categoryId: string; productCode: string; productName: string; price: string; imageUrl?: string; soldOut?: boolean }[];
   categories?: Category[];
   environment?: "sandbox" | "production";
-  source?: "shared-catalog";
+  source?: "shared-catalog" | "smaregi-production";
   readOnly?: boolean;
   syncedAt?: string | null;
   error?: string;

@@ -9,8 +9,19 @@ export async function GET() {
   if (!await getChatGPTUser()) return NextResponse.json({ error: "LOGIN_REQUIRED" }, { status: 401 });
   try {
     const shared = await getSharedCatalog();
+    const smaregi = await getSmaregiCatalog();
+    if (smaregi.environment === "production" && smaregi.products.length > 0) {
+      const sharedByCode = new Map(shared?.products.map((product) => [product.productCode, product]) ?? []);
+      return NextResponse.json({
+        ...smaregi,
+        products: smaregi.products.map((product) => ({ ...product, ...sharedByCode.get(product.productCode), categoryId: product.categoryId })),
+        source: "smaregi-production",
+        readOnly: false,
+        syncedAt: shared?.syncedAt ?? null,
+      }, { headers: { "Cache-Control": "no-store" } });
+    }
     if (shared) return NextResponse.json(shared, { headers: { "Cache-Control": "no-store" } });
-    return NextResponse.json(await getSmaregiCatalog(), { headers: { "Cache-Control": "no-store" } });
+    return NextResponse.json(smaregi, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "SMAREGI_ERROR" }, { status: 502 });
   }
