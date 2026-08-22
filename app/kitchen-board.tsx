@@ -14,7 +14,8 @@ const actionByStatus: Partial<Record<Status, { action: "START" | "READY" | "CALL
   ACCEPTED: { action: "START", label: "調理を開始" }, COOKING: { action: "READY", label: "完成" }, READY: { action: "CALL", label: "呼出" }, CALLED: { action: "PICKUP", label: "受渡完了" },
 };
 
-const OLD_BGM_URL = "https://raw.githubusercontent.com/WCE-06/liff-entry/fa5905f5c97a16441dabab90a9ac70d291ec6788/bgm.mp3";
+const OLD_BGM_URL = "https://wce-06.github.io/liff-entry/audio/bgm.mp3";
+const ENTRY_BGM_BASE_VOLUME = 0.62;
 const BGM_DUCK_VOLUME = 0.04;
 
 function scheduledVolume() {
@@ -25,7 +26,10 @@ function scheduledVolume() {
   return 0.25;
 }
 
-function volumeLabel() { const percent = scheduledVolume() * 100; const shown = percent < 0.001 ? percent.toFixed(5) : percent < 1 ? percent.toFixed(1) : Math.round(percent); return `現在の時間帯音量 ${shown}%`; }
+function entryMasterVolume() { const hour = new Date().getHours(); if (hour < 2) return 0.30; if (hour < 8) return 0.01; if (hour < 9) return 0.75; if (hour < 18) return 1; if (hour < 21) return 0.75; return 0.50; }
+function entryBgmVolume() { return ENTRY_BGM_BASE_VOLUME * entryMasterVolume(); }
+function percentLabel(value: number) { const percent = value * 100; return percent < 0.001 ? percent.toFixed(5) : percent < 1 ? percent.toFixed(2) : `${Math.round(percent)}`; }
+function volumeLabel() { return `BGM ${percentLabel(entryBgmVolume())}%・呼出 ${percentLabel(scheduledVolume())}%`; }
 
 export default function KitchenBoard({ displayOnly = false }: { displayOnly?: boolean }) {
   const [screen, setScreen] = useState<Screen>(displayOnly ? "CALL_MONITOR" : "ORDERS");
@@ -37,7 +41,7 @@ export default function KitchenBoard({ displayOnly = false }: { displayOnly?: bo
   const bgmRef = useRef<HTMLAudioElement | null>(null), audioQueue = useRef(Promise.resolve()), audioEnabledRef = useRef(false), bgmEnabledRef = useRef(true);
 
   function bgmVolume() {
-    return scheduledVolume();
+    return entryBgmVolume();
   }
 
   async function enableAudio() {
