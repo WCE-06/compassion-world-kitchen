@@ -24,7 +24,7 @@ function scheduledVolume() {
   return entryMasterVolume();
 }
 
-function entryMasterVolume() { const hour = new Date().getHours(); if (hour < 2) return 0.30; if (hour < 8) return 0.01; if (hour < 9) return 0.75; if (hour < 18) return 1; if (hour < 21) return 0.75; return 0.50; }
+function entryMasterVolume() { const hour = new Date().getHours(); if (hour < 2) return 0.30; if (hour < 8) return 0.01; if (hour < 10) return 0.30; if (hour < 11) return 0.50; if (hour < 18) return 1; if (hour < 21) return 0.75; return 0.50; }
 function entryBgmVolume() { return ENTRY_BGM_BASE_VOLUME * entryMasterVolume(); }
 function percentLabel(value: number) { const percent = value * 100; return percent < 0.001 ? percent.toFixed(5) : percent < 1 ? percent.toFixed(2) : `${Math.round(percent)}`; }
 function volumeLabel() { return `BGM ${percentLabel(entryBgmVolume())}%・呼出 ${percentLabel(scheduledVolume())}%`; }
