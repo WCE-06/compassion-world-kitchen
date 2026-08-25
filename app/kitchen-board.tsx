@@ -35,7 +35,7 @@ export default function KitchenBoard({ displayOnly = false }: { displayOnly?: bo
   const [data, setData] = useState<Record<Department, Fulfillment[]>>({ FOOD: [], DRINK: [] });
   const [history, setHistory] = useState<Fulfillment[]>([]);
   const [loading, setLoading] = useState(true), [message, setMessage] = useState(""), [updating, setUpdating] = useState<string | null>(null);
-  const [lastSync, setLastSync] = useState<Date | null>(null), previousCalled = useRef(new Set<string>()), calledInitialized = useRef(false);
+  const [lastSync, setLastSync] = useState<Date | null>(null), previousCalled = useRef(new Set<string>()), calledInitialized = useRef(false), knownOrders = useRef(new Set<string>()), ordersInitialized = useRef(false);
   const [audioEnabled, setAudioEnabled] = useState(false), [bgmEnabled, setBgmEnabled] = useState(true), [testingFull, setTestingFull] = useState(false), [audioStatus, setAudioStatus] = useState(`音声は停止中です・${volumeLabel()}`);
   const bgmRef = useRef<HTMLAudioElement | null>(null), bgmContextRef = useRef<AudioContext | null>(null), bgmGainRef = useRef<GainNode | null>(null), bgmSourceRef = useRef<MediaElementAudioSourceNode | null>(null), audioQueue = useRef(Promise.resolve()), audioEnabledRef = useRef(false), bgmEnabledRef = useRef(true);
 
@@ -99,6 +99,18 @@ export default function KitchenBoard({ displayOnly = false }: { displayOnly?: bo
     });
   }
 
+  function announceNewOrder(items: Fulfillment[]) {
+    if (!audioEnabledRef.current) { setAudioStatus("新しい注文があります。『音声・BGMを開始』を押してください"); return; }
+    const numbers = items.map((item) => `${item.department === "FOOD" ? "フード" : "ドリンク"}番号、${String(item.callNumber).padStart(3, "0")}番`).join("、");
+    audioQueue.current = audioQueue.current.then(async () => {
+      setAudioStatus(`新規注文：${numbers}`);
+      if (bgmRef.current && bgmEnabledRef.current) setBgmVolume(Math.min(bgmVolume(), BGM_DUCK_VOLUME));
+      playLegacyChime(); await wait(650); await speak(`新しい注文が入りました。${numbers}。注文内容を確認してください。`);
+      if (bgmRef.current && bgmEnabledRef.current) setBgmVolume(bgmVolume());
+      setAudioStatus(`音声・BGM 稼働中・${volumeLabel()}`);
+    });
+  }
+
   function broadcast(title: string, text: string) {
     if (!audioEnabledRef.current) { setAudioStatus("館内放送の前に『音声・BGMを開始』を押してください"); return; }
     audioQueue.current = audioQueue.current.then(async () => {
@@ -114,6 +126,13 @@ export default function KitchenBoard({ displayOnly = false }: { displayOnly?: bo
       const [food, drink, foodHistory, drinkHistory] = await Promise.all([foodResponse.json(), drinkResponse.json(), foodHistoryResponse.json(), drinkHistoryResponse.json()]);
       if (!foodResponse.ok || !drinkResponse.ok) throw new Error(food.error ?? drink.error ?? "注文を取得できませんでした");
       const next = { FOOD: food.fulfillments ?? [], DRINK: drink.fulfillments ?? [] } as Record<Department, Fulfillment[]>;
+      const active = [...next.FOOD, ...next.DRINK];
+      if (!displayOnly && ordersInitialized.current) {
+        const freshOrders = new Map<string, Fulfillment[]>();
+        active.filter((item) => item.status === "ACCEPTED" && !knownOrders.current.has(item.orderId)).forEach((item) => freshOrders.set(item.orderId, [...(freshOrders.get(item.orderId) ?? []), item]));
+        freshOrders.forEach((items) => announceNewOrder(items));
+      }
+      active.forEach((item) => knownOrders.current.add(item.orderId)); ordersInitialized.current = true;
       const called = new Set([...next.FOOD, ...next.DRINK].filter((item) => item.status === "CALLED").map((item) => item.id));
       if (!displayOnly && calledInitialized.current) [...next.FOOD, ...next.DRINK].filter((item) => item.status === "CALLED" && !previousCalled.current.has(item.id)).forEach(announce);
       calledInitialized.current = true;
