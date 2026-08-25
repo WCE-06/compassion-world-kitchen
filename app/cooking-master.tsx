@@ -8,7 +8,7 @@ type MasterItem = { section: Section; name: string; summary: string; tags: strin
 const sectionLabels: Record<Section, string> = { EQUIPMENT: "設備", COMMON: "共通工程", FRIED: "揚げ物", RICE: "ご飯もの", NOODLE: "麺類", DESSERT: "デザート" };
 
 const items: MasterItem[] = [
-  { section:"EQUIPMENT",name:"フライヤー",summary:"揚げ物基本 180℃・6分",tags:["180℃","6分","ポテト8分"],details:[{label:"基本",value:"180℃ 6分"},{label:"ポテト系",value:"追加2分（合計8分）"}] },
+  { section:"EQUIPMENT",name:"フライヤー",summary:"揚げ物基本 180℃・6分",tags:["180℃","6分","唐揚げ12個","ポテト400g"],details:[{label:"基本",value:"180℃ 6分"},{label:"唐揚げ容量",value:"最大12個／1バッチ"},{label:"ポテト容量",value:"1食200g・最大2食（400g）／1バッチ"},{label:"混載換算",value:"ポテト1食＝唐揚げ6個分の容量"},{label:"ポテト系",value:"追加2分（合計8分）"}] },
   { section:"EQUIPMENT",name:"電子レンジ",summary:"Panasonic・1000W運用",tags:["1000W","600W","2容器"],details:[{label:"標準",value:"1000W・最大3分想定"},{label:"同時加熱",value:"容器2個まで"},{label:"代替",value:"600W時間も各工程に記載"}] },
   { section:"EQUIPMENT",name:"湯煎器",summary:"角煮運用変更により廃止候補",tags:["廃止候補"],caution:"現状は角煮用途のみ。新しい角煮工程では原則使用しない。" },
   { section:"EQUIPMENT",name:"温泉卵調理器",summary:"1回2個・約15分",tags:["2個","15分"] },
