@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireScheduleToken } from "@/lib/schedule-auth";
 import { calculateSchedule, CALCULATION_VERSION, iso, type EstimateInput } from "@/lib/schedule-engine";
-import { drinkWorkMinutes, liveFoodOrderCount, scheduleDb } from "@/lib/schedule-store";
+import { drinkWorkMinutes, liveKitchenLoad, scheduleDb } from "@/lib/schedule-store";
 
 type Context = { params: Promise<{ orderId: string }> };
 type UpdateBody = EstimateInput & { reason?: string; mode?: "AUTOMATIC" | "MANUAL"; foodReadyAt?: string; drinkReadyAt?: string; foodCallNumber?: number; drinkCallNumber?: number };
@@ -20,7 +20,7 @@ export async function PUT(request: NextRequest, context: Context) {
   const { orderId } = await context.params; if (!/^[A-Za-z0-9_-]{3,100}$/.test(orderId)) return NextResponse.json({ error: "INVALID_ORDER_ID" }, { status: 400 });
   const body = await request.json().catch(() => null) as UpdateBody | null;
   if (!body?.requestId || !Array.isArray(body.items) || !body.items.length) return NextResponse.json({ error: "INVALID_REQUEST" }, { status: 400 });
-  const mode = body.mode ?? "AUTOMATIC", now = Date.now(), calculated = calculateSchedule(body, await drinkWorkMinutes(), await liveFoodOrderCount());
+  const load=await liveKitchenLoad(),mode = body.mode ?? "AUTOMATIC", now = Date.now(), calculated = calculateSchedule(body, await drinkWorkMinutes(),load.activeFoodOrders,load.activeMicrowaveSeconds);
   const manualFood = mode === "MANUAL" && body.foodReadyAt ? Date.parse(body.foodReadyAt) : null, manualDrink = mode === "MANUAL" && body.drinkReadyAt ? Date.parse(body.drinkReadyAt) : null;
   const foodReadyAt = Number.isFinite(manualFood) ? manualFood : calculated.foodReadyAt;
   const drinkReadyAt = Number.isFinite(manualDrink) ? manualDrink : calculated.drinkReadyAt;
