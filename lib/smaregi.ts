@@ -29,6 +29,7 @@ export type SmaregiProductInput = {
   productCode: string;
   productName: string;
   price: number;
+  soldOut?: boolean;
 };
 
 let cachedToken: { value: string; expiresAt: number } | null = null;
@@ -102,7 +103,7 @@ function productPayload(input: SmaregiProductInput) {
     taxDivision: "0",
     productPriceDivision: "1",
     price: String(input.price),
-    displayFlag: "1",
+    displayFlag: input.soldOut ? "0" : "1",
     division: "0",
     salesDivision: "0",
   };
@@ -120,4 +121,14 @@ export function updateSmaregiProduct(productId: string, input: SmaregiProductInp
 export function updateSmaregiDisplaySequence(productId: string, displaySequence: number) {
   if (!/^\d{1,15}$/.test(productId) || !Number.isInteger(displaySequence) || displaySequence < 0) throw new Error("INVALID_DISPLAY_SEQUENCE");
   return smaregiFetch<SmaregiProduct>(`/products/${productId}`, { method: "PATCH", body: JSON.stringify({ displaySequence: String(displaySequence) }) });
+}
+
+export function updateSmaregiSoldOut(productId:string,soldOut:boolean){
+  if(!/^\d{1,15}$/.test(productId))throw new Error("INVALID_PRODUCT_ID");
+  return smaregiFetch<SmaregiProduct>(`/products/${productId}`,{method:"PATCH",body:JSON.stringify({displayFlag:soldOut?"0":"1"})});
+}
+
+export function deleteSmaregiProduct(productId:string){
+  if(!/^\d{1,15}$/.test(productId))throw new Error("INVALID_PRODUCT_ID");
+  return smaregiFetch<void>(`/products/${productId}`,{method:"DELETE"});
 }

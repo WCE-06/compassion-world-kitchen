@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
       const kitchenCategoryIds = new Set(kitchenProducts.map((product) => product.categoryId));
       return NextResponse.json({
         ...smaregi,
-        products: matchedProducts.map(({product,shared}) => ({ ...product, ...shared, productCode:product.productCode, categoryId: product.categoryId })),
+        products: matchedProducts.map(({product,shared}) => ({ ...product, ...shared, productCode:product.productCode, categoryId: product.categoryId, soldOut:Boolean(shared?.soldOut)||product.displayFlag==="0" })),
         categories: smaregi.categories.filter((category) => kitchenCategoryIds.has(category.categoryId)),
         source: "smaregi-production",
         readOnly: false,
