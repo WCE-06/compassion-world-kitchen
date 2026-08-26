@@ -53,7 +53,7 @@ export default function KitchenBoard({ displayOnly = false }: { displayOnly?: bo
     setOptimizerHistory(current=>current.slice(0,-1));
     setOptimizerFocus(taskId);
   };
-  const [lastSync, setLastSync] = useState<Date | null>(null), previousCalled = useRef(new Set<string>()), calledInitialized = useRef(false), knownOrders = useRef(new Set<string>()), ordersInitialized = useRef(false);
+  const [lastSync, setLastSync] = useState<Date | null>(null), previousCalled = useRef(new Set<string>()), calledInitialized = useRef(false), knownUnits = useRef(new Set<string>()), ordersInitialized = useRef(false), pendingNewOrders = useRef(new Map<string,Fulfillment[]>());
   const [audioEnabled, setAudioEnabled] = useState(false), [bgmEnabled, setBgmEnabled] = useState(true), [testingFull, setTestingFull] = useState(false), [audioStatus, setAudioStatus] = useState(`音声は停止中です・${volumeLabel()}`);
   const bgmRef = useRef<HTMLAudioElement | null>(null), bgmContextRef = useRef<AudioContext | null>(null), bgmGainRef = useRef<GainNode | null>(null), bgmSourceRef = useRef<MediaElementAudioSourceNode | null>(null), audioQueue = useRef(Promise.resolve()), audioEnabledRef = useRef(false), bgmEnabledRef = useRef(true);
 
@@ -88,6 +88,7 @@ export default function KitchenBoard({ displayOnly = false }: { displayOnly?: bo
       if (bgmEnabled) await bgm.play();
       audioEnabledRef.current = true; setAudioEnabled(true); setAudioStatus(`音声・BGM 稼働中・${volumeLabel()}`);
     } catch { audioEnabledRef.current = true; setAudioEnabled(true); setAudioStatus(`呼出音声は稼働中・${volumeLabel()}`); }
+    flushPendingNewOrders();
   }
 
   function toggleBgm() {
@@ -118,7 +119,13 @@ export default function KitchenBoard({ displayOnly = false }: { displayOnly?: bo
   }
 
   function announceNewOrder(items: Fulfillment[]) {
-    if (!audioEnabledRef.current) { setAudioStatus("新しい注文があります。『音声・BGMを開始』を押してください"); return; }
+    if (!items.length) return;
+    if (!audioEnabledRef.current) {
+      const orderId=items[0].orderId,current=pendingNewOrders.current.get(orderId)??[],known=new Set(current.map(item=>item.id));
+      pendingNewOrders.current.set(orderId,[...current,...items.filter(item=>!known.has(item.id))]);
+      setAudioStatus(`新しい注文が${pendingNewOrders.current.size}件あります。『音声・BGMを開始』を押してください`);
+      return;
+    }
     const numbers = items.map((item) => `${item.department === "FOOD" ? "フード" : "ドリンク"}番号、${String(item.callNumber).padStart(3, "0")}番`).join("、");
     audioQueue.current = audioQueue.current.then(async () => {
       setAudioStatus(`新規注文：${numbers}`);
@@ -127,6 +134,13 @@ export default function KitchenBoard({ displayOnly = false }: { displayOnly?: bo
       if (bgmRef.current && bgmEnabledRef.current) setBgmVolume(bgmVolume());
       setAudioStatus(`音声・BGM 稼働中・${volumeLabel()}`);
     });
+  }
+
+  function flushPendingNewOrders() {
+    if (!audioEnabledRef.current || !pendingNewOrders.current.size) return;
+    const queued=[...pendingNewOrders.current.values()];
+    pendingNewOrders.current.clear();
+    queued.forEach(announceNewOrder);
   }
 
   function broadcast(title: string, text: string) {
@@ -147,10 +161,10 @@ export default function KitchenBoard({ displayOnly = false }: { displayOnly?: bo
       const active = [...next.FOOD, ...next.DRINK];
       if (!displayOnly && ordersInitialized.current) {
         const freshOrders = new Map<string, Fulfillment[]>();
-        active.filter((item) => item.status === "ACCEPTED" && !knownOrders.current.has(item.orderId)).forEach((item) => freshOrders.set(item.orderId, [...(freshOrders.get(item.orderId) ?? []), item]));
+        active.filter((item) => item.status === "ACCEPTED" && !knownUnits.current.has(item.id)).forEach((item) => freshOrders.set(item.orderId, [...(freshOrders.get(item.orderId) ?? []), item]));
         freshOrders.forEach((items) => announceNewOrder(items));
       }
-      active.forEach((item) => knownOrders.current.add(item.orderId)); ordersInitialized.current = true;
+      active.forEach((item) => knownUnits.current.add(item.id)); ordersInitialized.current = true;
       const called = new Set([...next.FOOD, ...next.DRINK].filter((item) => item.status === "CALLED").map((item) => item.id));
       if (!displayOnly && calledInitialized.current) [...next.FOOD, ...next.DRINK].filter((item) => item.status === "CALLED" && !previousCalled.current.has(item.id)).forEach(announce);
       calledInitialized.current = true;
