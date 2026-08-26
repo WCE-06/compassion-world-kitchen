@@ -26,3 +26,9 @@ test("受付済み注文のレンジ占有時間を加算する",()=>{
   assert.ok((occupied.foodEstimatedMinutes??0)>(clear.foodEstimatedMinutes??0));
   assert.equal(occupied.inputs.activeMicrowaveSeconds,240);
 });
+
+test("かき氷は受信区分がDRINKでもフード提供時間として計算する",()=>{
+  const result=calculateSchedule({requestId:"kakigori",orderedAt:"2026-08-26T12:00:00+09:00",items:[{name:"かき氷 いちご",department:"DRINK",quantity:1}]},5,0,0);
+  assert.ok(result.foodReadyAt);
+  assert.equal(result.drinkReadyAt,null);
+});

@@ -28,7 +28,7 @@ function foodMinutes(item: EstimateItem) {
 
 export function calculateSchedule(input: EstimateInput, drinkWorkMinutes = 5, liveFoodOrders = 0,liveMicrowaveSeconds=0) {
   const calculatedAt = Date.now(), orderedAt = input.orderedAt ? Date.parse(input.orderedAt) : calculatedAt;
-  const foods = input.items.filter((item) => item.department === "FOOD" || item.department == null && !/drink|soft|alcohol|cafe|ドリンク|コーヒー|ジュース|茶/i.test(`${item.productCode ?? ""} ${item.name ?? ""}`));
+  const foods = input.items.filter((item) => /かき氷|kakigori/i.test(`${item.productCode ?? ""} ${item.name ?? ""}`) || item.department === "FOOD" || item.department == null && !/drink|soft|alcohol|cafe|ドリンク|コーヒー|ジュース|茶/i.test(`${item.productCode ?? ""} ${item.name ?? ""}`));
   const drinks = input.items.filter((item) => !foods.includes(item));
   const individual = foods.map((item) => foodMinutes(item));
   const longest = individual.length ? Math.max(...individual) : 0;
