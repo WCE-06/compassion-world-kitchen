@@ -1,4 +1,5 @@
 import { env } from "cloudflare:workers";
+import { normalizedMenuCategory } from "@/lib/menu-category";
 
 type Runtime = { SELF_REGISTER_CATALOG_URL?: string };
 type SharedProduct = {
@@ -38,7 +39,7 @@ export async function getSharedCatalog() {
     result?: { products?: SharedProduct[]; sync?: { completedAt?: string; storedCount?: number } };
   };
   if (!body.ok || !Array.isArray(body.result?.products)) throw new Error("SHARED_CATALOG_INVALID");
-  const products = body.result.products.filter((product) => product.section === "kitchen" && product.menuCategory);
+  const products = body.result.products.filter((product) => product.section === "kitchen" && product.menuCategory).map(product=>({...product,menuCategory:normalizedMenuCategory(product.name,product.menuCategory)}));
   const categoryIds = [...new Set(products.map((product) => product.menuCategory as string))];
   return {
     products: products.map((product) => ({
