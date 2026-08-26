@@ -6,6 +6,7 @@ test("フードへ紛れたドリンクを商品名から戻す",()=>{
   assert.equal(normalizedMenuCategory("アイスコーヒー","food-side"),"soft-cafe");
   assert.equal(normalizedMenuCategory("オレンジジュース","food-don"),"soft-simple");
   assert.equal(normalizedMenuCategory("ファンタ メロン","food-side"),"soft-simple");
+  assert.equal(normalizedMenuCategory("自家製レモネード","food-side"),"soft-simple");
 });
 
 test("29から始まるインストア商品コードだけを採用する",()=>{
