@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { calculateSchedule, microwaveSeconds, SHARED_CARBONARA_SAUCE_600W_SECONDS } from "../lib/schedule-engine.ts";
+import { calculateSchedule, microwaveSeconds, SHARED_CARBONARA_SAUCE_600W_SECONDS, FRYER_PREHEAT_MINUTES } from "../lib/schedule-engine.ts";
 
 const combo={requestId:"carbonara-tsukemen",orderedAt:"2026-08-26T12:00:00+09:00",items:[
   {name:"カルボナーラパスタ",department:"FOOD",quantity:1,preparationMinutes:9},
@@ -29,6 +29,22 @@ test("受付済み注文のレンジ占有時間を加算する",()=>{
 
 test("角煮丼は天かすを載せた状態で1000W 40秒として計上する",()=>{
   assert.equal(microwaveSeconds({name:"角煮丼",department:"FOOD",quantity:1}),40);
+});
+
+test("停止中のフライヤー商品には予熱10分を加算する",()=>{
+  const input={requestId:"fried-cold",orderedAt:"2026-08-26T12:00:00+09:00",items:[{name:"フリフリポテト",department:"FOOD",quantity:1,preparationMinutes:8}]};
+  const cold=calculateSchedule(input,5,0,0,false),hot=calculateSchedule(input,5,0,0,true);
+  assert.equal(FRYER_PREHEAT_MINUTES,10);
+  assert.equal(cold.inputs.fryerPreheatMinutes,10);
+  assert.equal(hot.inputs.fryerPreheatMinutes,0);
+  assert.equal((cold.foodEstimatedMinutes??0)-(hot.foodEstimatedMinutes??0),10);
+});
+
+test("フライヤー予熱はレンジ商品へ一律加算せず並行計算する",()=>{
+  const input={requestId:"parallel-preheat",orderedAt:"2026-08-26T12:00:00+09:00",items:[{name:"フリフリポテト",department:"FOOD",quantity:1,preparationMinutes:8},{name:"ほうとう",department:"FOOD",quantity:1,preparationMinutes:15}]};
+  const result=calculateSchedule(input,5,0,0,false);
+  assert.equal(result.inputs.fryerPathMinutes,18);
+  assert.ok((result.foodEstimatedMinutes??0)<27);
 });
 
 test("かき氷は受信区分がDRINKでもフード提供時間として計算する",()=>{
