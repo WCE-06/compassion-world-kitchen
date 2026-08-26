@@ -8,10 +8,10 @@ test("フードへ紛れたドリンクを商品名から戻す",()=>{
   assert.equal(normalizedMenuCategory("ファンタ メロン","food-side"),"soft-simple");
 });
 
-test("29から始まる13桁インストアバーコードだけを採用する",()=>{
+test("29から始まるインストア商品コードだけを採用する",()=>{
   assert.equal(isKitchenInStoreBarcode("2901234567890"),true);
+  assert.equal(isKitchenInStoreBarcode("290123"),true);
   assert.equal(isKitchenInStoreBarcode("4901234567890"),false);
-  assert.equal(isKitchenInStoreBarcode("290123"),false);
 });
 
 test("デザートへ紛れたドリンクを戻す",()=>{

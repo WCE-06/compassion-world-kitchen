@@ -1,6 +1,6 @@
 const validCategories=new Set(["soft-simple","soft-cafe","soft-mocktail","alcohol-cocktail","alcohol-main","food-side","food-don","food-udon","food-pasta","food-tsukemen","dessert"]);
 
-export function isKitchenInStoreBarcode(code:string){return /^29\d{11}$/.test(code.trim())}
+export function isKitchenInStoreBarcode(code:string){return /^29/.test(code.trim())}
 
 export function normalizedMenuCategory(name:string,current?:string){
   const text=name.trim().toLocaleLowerCase("ja-JP"),existing=current??"";
