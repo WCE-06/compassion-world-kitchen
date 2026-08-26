@@ -127,8 +127,3 @@ export function updateSmaregiSoldOut(productId:string,soldOut:boolean){
   if(!/^\d{1,15}$/.test(productId))throw new Error("INVALID_PRODUCT_ID");
   return smaregiFetch<SmaregiProduct>(`/products/${productId}`,{method:"PATCH",body:JSON.stringify({displayFlag:soldOut?"0":"1"})});
 }
-
-export function deleteSmaregiProduct(productId:string){
-  if(!/^\d{1,15}$/.test(productId))throw new Error("INVALID_PRODUCT_ID");
-  return smaregiFetch<void>(`/products/${productId}`,{method:"DELETE"});
-}

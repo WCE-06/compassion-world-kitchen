@@ -11,13 +11,14 @@ type MenuItem = {
   smaregiCategoryId: string;
   image?: string;
   soldOut?: boolean;
+  published: boolean;
   menuCategory: string;
   displaySequence: number;
   status: "PUBLISHED" | "DRAFT";
 };
 type Category = { categoryId: string; categoryName: string };
 type CatalogResponse = {
-  products?: { productId: string; categoryId: string; productCode: string; productName: string; price: string; displayFlag?:string; imageUrl?: string; soldOut?: boolean; menuCategory?: string; displaySequence?: number | string }[];
+  products?: { productId: string; categoryId: string; productCode: string; productName: string; price: string; displayFlag?:string; imageUrl?: string; soldOut?: boolean; menuCategory?: string; displaySequence?: number | string; showOnSelfRegister?: boolean; showOnMobileOrder?: boolean }[];
   categories?: Category[];
   environment?: "sandbox" | "production";
   source?: "shared-catalog" | "smaregi-production";
@@ -41,7 +42,6 @@ export default function MenuManager() {
   const [orderDirty, setOrderDirty] = useState(false);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [mutatingId,setMutatingId]=useState<string|null>(null);
-  const [confirmingDeleteId,setConfirmingDeleteId]=useState<string|null>(null);
   const libraryInput = useRef<HTMLInputElement>(null);
   const cameraInput = useRef<HTMLInputElement>(null);
 
@@ -65,6 +65,7 @@ export default function MenuManager() {
         smaregiCategoryId: item.categoryId,
         image: item.imageUrl || undefined,
         soldOut: item.soldOut,
+        published: item.showOnSelfRegister !== false && item.showOnMobileOrder !== false,
         menuCategory: item.menuCategory ?? "food-side",
         displaySequence: Number(item.displaySequence ?? 999999999),
         status: "PUBLISHED",
@@ -82,7 +83,7 @@ export default function MenuManager() {
   useEffect(() => { void loadCatalog(); }, []);
 
   function openForm(item?: MenuItem) {
-    setEditing(item ? { ...item } : { id: "", name: "", code: "", price: 0, category: "FOOD", smaregiCategoryId: categories[0]?.categoryId ?? "", menuCategory, displaySequence: 999999999, status: "DRAFT" });
+    setEditing(item ? { ...item } : { id: "", name: "", code: "", price: 0, category: "FOOD", smaregiCategoryId: categories[0]?.categoryId ?? "", menuCategory, displaySequence: 999999999, published: true, status: "DRAFT" });
     setNotice("");
   }
 
@@ -161,10 +162,9 @@ export default function MenuManager() {
     try{const response=await fetch(`/api/v1/smaregi/catalog/${item.id}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"SET_SOLD_OUT",soldOut})}),body=await response.json()as{error?:string};if(!response.ok)throw new Error(body.error??"売り切れ状態を更新できませんでした");setNotice(soldOut?`${item.name}を売り切れにしました`:`${item.name}の販売を再開しました`)}catch(error){setMenus(current=>current.map(menu=>menu.id===item.id?{...menu,soldOut:Boolean(item.soldOut)}:menu));setNotice(error instanceof Error?`同期に失敗したため元に戻しました：${friendlyError(error.message)}`:"同期に失敗したため元に戻しました")}finally{setMutatingId(null)}
   }
 
-  async function removeMenu(item:MenuItem){
-    if(confirmingDeleteId!==item.id){setConfirmingDeleteId(item.id);setNotice(`「${item.name}」を削除する場合は、もう一度「本当に削除」を押してください`);return}
-    setConfirmingDeleteId(null);setMutatingId(item.id);setMenus(current=>current.filter(menu=>menu.id!==item.id));setNotice(`${item.name}を一覧から削除しました。スマレジへ同期中…`);
-    try{const response=await fetch(`/api/v1/smaregi/catalog/${item.id}`,{method:"DELETE"}),body=await response.json()as{error?:string};if(!response.ok)throw new Error(body.error??"商品を削除できませんでした");setNotice(`${item.name}をスマレジから削除しました`)}catch(error){setMenus(current=>current.some(menu=>menu.id===item.id)?current:[...current,item]);setNotice(error instanceof Error?`削除に失敗したため一覧へ戻しました：${friendlyError(error.message)}`:"削除に失敗したため一覧へ戻しました")}finally{setMutatingId(null)}
+  async function togglePublication(item:MenuItem){
+    const published=!item.published;setMutatingId(item.id);setMenus(current=>current.map(menu=>menu.id===item.id?{...menu,published}:menu));setNotice(`${item.name}を${published?"再掲載":"オーダー非掲載"}へ変更しています…`);
+    try{const response=await fetch(`/api/v1/smaregi/catalog/${item.id}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"SET_PUBLICATION",productCode:item.code,published})}),body=await response.json()as{error?:string};if(!response.ok)throw new Error(body.error??"掲載状態を更新できませんでした");setNotice(published?`${item.name}をモバイルオーダー・セルフレジへ再掲載しました`:`${item.name}をモバイルオーダー・セルフレジから非掲載にしました。スマレジ商品マスタは残っています`)}catch(error){setMenus(current=>current.map(menu=>menu.id===item.id?{...menu,published:item.published}:menu));setNotice(error instanceof Error?`掲載状態を戻しました：${friendlyError(error.message)}`:"掲載状態を戻しました")}finally{setMutatingId(null)}
   }
 
   if (editing) return (
@@ -233,9 +233,9 @@ export default function MenuManager() {
         {visibleMenus.map((item, index) => <article className={`sortable-menu-card ${draggingId === item.id ? "dragging" : ""}`} key={item.id} onDragOver={(event) => event.preventDefault()} onDrop={() => { if (draggingId) moveMenu(draggingId, item.id); setDraggingId(null); }}>
           <div className="drag-handle" draggable onDragStart={() => setDraggingId(item.id)} onDragEnd={() => setDraggingId(null)} aria-label="ドラッグして並べ替え">⠿<small>{index + 1}</small></div>
           <div className={`menu-thumb ${item.image ? "has-image" : ""}`}>{item.image ? <>{/* eslint-disable-next-line @next/next/no-img-element */}<img src={item.image} alt="" /></> : <span>POS</span>}</div>
-          <div className="sortable-menu-info"><b>{item.name}</b><span>¥{item.price.toLocaleString("ja-JP")}</span><small>{item.code || "コードなし"}{item.soldOut ? "・売切" : ""}</small></div>
+          <div className="sortable-menu-info"><b>{item.name}</b><span>¥{item.price.toLocaleString("ja-JP")}</span><small>{item.code || "コードなし"}{item.soldOut ? "・売切" : ""}{!item.published ? "・非掲載" : ""}</small></div>
           <div className="order-controls"><button disabled={index === 0} onClick={() => nudgeMenu(item.id, -1)} aria-label={`${item.name}を上へ`}>↑</button><button disabled={index === visibleMenus.length - 1} onClick={() => nudgeMenu(item.id, 1)} aria-label={`${item.name}を下へ`}>↓</button></div>
-          <div className="menu-item-actions"><button className={`soldout-menu ${item.soldOut?"active":""}`} disabled={sharedCatalog||mutatingId===item.id} onClick={()=>void toggleSoldOut(item)}>{mutatingId===item.id?"更新中":item.soldOut?"販売再開":"売り切れ"}</button><button className="edit-menu" disabled={sharedCatalog||mutatingId===item.id} onClick={() => openForm(item)}>編集</button><button className={`delete-menu ${confirmingDeleteId===item.id?"confirming":""}`} disabled={sharedCatalog||mutatingId===item.id} onClick={()=>void removeMenu(item)}>{confirmingDeleteId===item.id?"本当に削除":"削除"}</button></div>
+          <div className="menu-item-actions"><button className={`soldout-menu ${item.soldOut?"active":""}`} disabled={sharedCatalog||mutatingId===item.id} onClick={()=>void toggleSoldOut(item)}>{mutatingId===item.id?"更新中":item.soldOut?"販売再開":"売り切れ"}</button><button className="edit-menu" disabled={sharedCatalog||mutatingId===item.id} onClick={() => openForm(item)}>編集</button><button className={`publication-menu ${!item.published?"inactive":""}`} disabled={mutatingId===item.id} onClick={()=>void togglePublication(item)}>{mutatingId===item.id?"更新中":item.published?"掲載停止":"再掲載"}</button></div>
         </article>)}
       </div>
       <button className="reload-catalog" onClick={() => void loadCatalog()} disabled={loading}>↻ スマレジから再取得</button>

@@ -1,7 +1,7 @@
 import { env } from "cloudflare:workers";
 import { normalizedMenuCategory } from "@/lib/menu-category";
 
-type Runtime = { SELF_REGISTER_CATALOG_URL?: string };
+type Runtime = { SELF_REGISTER_CATALOG_URL?: string; MEMBERS_API_BASE_URL?: string; KITCHEN_API_TOKEN?: string };
 type SharedProduct = {
   productId: string | number;
   code?: string;
@@ -13,6 +13,8 @@ type SharedProduct = {
   description?: string;
   soldOut?: boolean;
   displaySequence?: number;
+  showOnSelfRegister?: boolean;
+  showOnMobileOrder?: boolean;
 };
 
 const categoryNames: Record<string, string> = {
@@ -30,7 +32,8 @@ const categoryNames: Record<string, string> = {
 };
 
 export async function getSharedCatalog() {
-  const url = (env as unknown as Runtime).SELF_REGISTER_CATALOG_URL;
+  const runtime = env as unknown as Runtime;
+  const url = runtime.SELF_REGISTER_CATALOG_URL;
   if (!url) return null;
   const response = await fetch(url, { headers: { Accept: "application/json" } });
   if (!response.ok) throw new Error(`SHARED_CATALOG_ERROR:${response.status}`);
@@ -39,7 +42,15 @@ export async function getSharedCatalog() {
     result?: { products?: SharedProduct[]; sync?: { completedAt?: string; storedCount?: number } };
   };
   if (!body.ok || !Array.isArray(body.result?.products)) throw new Error("SHARED_CATALOG_INVALID");
-  const products = body.result.products.filter((product) => product.section === "kitchen" && product.menuCategory).map(product=>({...product,menuCategory:normalizedMenuCategory(product.name,product.menuCategory)}));
+  let publication = new Map<string, { showOnSelfRegister: boolean; showOnMobileOrder: boolean }>();
+  if (runtime.KITCHEN_API_TOKEN) {
+    try {
+      const publicationResponse = await fetch(`${runtime.MEMBERS_API_BASE_URL ?? "https://compassion-world-members-card.combetter27.chatgpt.site"}/api/v1/kitchen/catalog-publication`, { headers: { Authorization: `Bearer ${runtime.KITCHEN_API_TOKEN}` }, cache: "no-store" });
+      const publicationBody = await publicationResponse.json() as { products?: { productCode: string; showOnSelfRegister: boolean; showOnMobileOrder: boolean }[] };
+      if (publicationResponse.ok) publication = new Map((publicationBody.products ?? []).map((item) => [item.productCode, item]));
+    } catch { /* Keep the catalog usable during a temporary publication API outage. */ }
+  }
+  const products = body.result.products.filter((product) => product.section === "kitchen" && product.menuCategory).map(product=>({...product,...publication.get(product.code ?? ""),menuCategory:normalizedMenuCategory(product.name,product.menuCategory)}));
   const categoryIds = [...new Set(products.map((product) => product.menuCategory as string))];
   return {
     products: products.map((product) => ({
@@ -53,6 +64,8 @@ export async function getSharedCatalog() {
       soldOut: Boolean(product.soldOut),
       menuCategory: product.menuCategory,
       displaySequence: Number(product.displaySequence ?? 999999999),
+      showOnSelfRegister: product.showOnSelfRegister ?? true,
+      showOnMobileOrder: product.showOnMobileOrder ?? true,
     })),
     categories: categoryIds.map((categoryId) => ({ categoryId, categoryName: categoryNames[categoryId] ?? categoryId })),
     environment: "production",
