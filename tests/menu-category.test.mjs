@@ -1,10 +1,17 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { normalizedMenuCategory } from "../lib/menu-category.ts";
+import { isKitchenInStoreBarcode, normalizedMenuCategory } from "../lib/menu-category.ts";
 
 test("フードへ紛れたドリンクを商品名から戻す",()=>{
   assert.equal(normalizedMenuCategory("アイスコーヒー","food-side"),"soft-cafe");
   assert.equal(normalizedMenuCategory("オレンジジュース","food-don"),"soft-simple");
+  assert.equal(normalizedMenuCategory("ファンタ メロン","food-side"),"soft-simple");
+});
+
+test("29から始まる13桁インストアバーコードだけを採用する",()=>{
+  assert.equal(isKitchenInStoreBarcode("2901234567890"),true);
+  assert.equal(isKitchenInStoreBarcode("4901234567890"),false);
+  assert.equal(isKitchenInStoreBarcode("290123"),false);
 });
 
 test("デザートへ紛れたドリンクを戻す",()=>{

@@ -1,5 +1,5 @@
 import { env } from "cloudflare:workers";
-import { normalizedMenuCategory } from "@/lib/menu-category";
+import { isKitchenInStoreBarcode, normalizedMenuCategory } from "@/lib/menu-category";
 
 type Runtime = { SELF_REGISTER_CATALOG_URL?: string; MEMBERS_API_BASE_URL?: string; KITCHEN_API_TOKEN?: string };
 type SharedProduct = {
@@ -50,7 +50,7 @@ export async function getSharedCatalog() {
       if (publicationResponse.ok) publication = new Map((publicationBody.products ?? []).map((item) => [item.productCode, item]));
     } catch { /* Keep the catalog usable during a temporary publication API outage. */ }
   }
-  const products = body.result.products.filter((product) => product.section === "kitchen" && product.menuCategory).map(product=>({...product,...publication.get(product.code ?? ""),menuCategory:normalizedMenuCategory(product.name,product.menuCategory)}));
+  const products = body.result.products.filter((product) => product.section === "kitchen" && product.menuCategory && isKitchenInStoreBarcode(product.code ?? "")).map(product=>({...product,...publication.get(product.code ?? ""),menuCategory:normalizedMenuCategory(product.name,product.menuCategory)}));
   const categoryIds = [...new Set(products.map((product) => product.menuCategory as string))];
   return {
     products: products.map((product) => ({
