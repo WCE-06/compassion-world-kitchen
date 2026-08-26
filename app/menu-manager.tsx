@@ -112,10 +112,10 @@ export default function MenuManager() {
   async function saveOrder() {
     setSaving(true); setNotice("");
     try {
-      const response = await fetch("/api/v1/smaregi/catalog/order", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ productIds: visibleMenus.map((item) => item.id) }) });
+      const response = await fetch("/api/v1/smaregi/catalog/order", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ productCodes: visibleMenus.map((item) => item.code) }) });
       const body = await response.json() as { error?: string };
       if (!response.ok) throw new Error(body.error ?? "表示順を保存できませんでした");
-      setOrderDirty(false); setNotice(`${surface === "mobile" ? "モバイルオーダー" : "セルフレジ"}の表示順をスマレジへ保存しました`);
+      setOrderDirty(false); setNotice(`${surface === "mobile" ? "モバイルオーダー" : "セルフレジ"}の表示順を共通メニューへ保存しました`);
     } catch (error) { setNotice(error instanceof Error ? friendlyError(error.message) : "表示順を保存できませんでした"); }
     finally { setSaving(false); }
   }

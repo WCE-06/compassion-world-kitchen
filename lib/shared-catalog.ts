@@ -42,11 +42,11 @@ export async function getSharedCatalog() {
     result?: { products?: SharedProduct[]; sync?: { completedAt?: string; storedCount?: number } };
   };
   if (!body.ok || !Array.isArray(body.result?.products)) throw new Error("SHARED_CATALOG_INVALID");
-  let publication = new Map<string, { showOnSelfRegister: boolean; showOnMobileOrder: boolean }>();
+  let publication = new Map<string, { displaySequence: number; showOnSelfRegister: boolean; showOnMobileOrder: boolean }>();
   if (runtime.KITCHEN_API_TOKEN) {
     try {
       const publicationResponse = await fetch(`${runtime.MEMBERS_API_BASE_URL ?? "https://compassion-world-members-card.combetter27.chatgpt.site"}/api/v1/kitchen/catalog-publication`, { headers: { Authorization: `Bearer ${runtime.KITCHEN_API_TOKEN}` }, cache: "no-store" });
-      const publicationBody = await publicationResponse.json() as { products?: { productCode: string; showOnSelfRegister: boolean; showOnMobileOrder: boolean }[] };
+      const publicationBody = await publicationResponse.json() as { products?: { productCode: string; displaySequence: number; showOnSelfRegister: boolean; showOnMobileOrder: boolean }[] };
       if (publicationResponse.ok) publication = new Map((publicationBody.products ?? []).map((item) => [item.productCode, item]));
     } catch { /* Keep the catalog usable during a temporary publication API outage. */ }
   }
