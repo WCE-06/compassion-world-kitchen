@@ -33,6 +33,7 @@ export default function TestOrderPanel({ onCreated }: { onCreated: () => void })
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
   const [clearing, setClearing] = useState(false);
+  const [confirmClear, setConfirmClear] = useState(false);
 
   const update = (index: number, quantity: number) =>
     setItems((rows) => rows.map((row, i) =>
@@ -64,7 +65,6 @@ export default function TestOrderPanel({ onCreated }: { onCreated: () => void })
   }
 
   async function clear() {
-    if (!window.confirm("テスト注文だけをすべて削除します。よろしいですか？")) return;
     setClearing(true);
     setMessage("テスト注文を削除しています…");
     try {
@@ -76,6 +76,7 @@ export default function TestOrderPanel({ onCreated }: { onCreated: () => void })
       const body = await responseBody(response);
       if (!response.ok) throw new Error(body.error ?? `DELETE_FAILED_${response.status}`);
       setMessage(`テスト注文を${body.deleted ?? 0}件削除しました`);
+      setConfirmClear(false);
       onCreated();
     } catch (error) {
       const reason = error instanceof Error && error.message.includes("UNAUTHORIZED")
@@ -95,9 +96,13 @@ export default function TestOrderPanel({ onCreated }: { onCreated: () => void })
           <h1>決済なしテスト注文</h1>
           <small>売上・ポイント・スマレジ取引には含まれません。商品1個ごとに呼出番号を発行します。</small>
         </div>
-        <button className="clear-tests" disabled={clearing || saving} onClick={() => void clear()}>
-          {clearing ? "削除中…" : "テスト注文を一括削除"}
-        </button>
+        <div className="clear-test-actions">
+          {confirmClear && <button className="cancel-clear" disabled={clearing} onClick={() => setConfirmClear(false)}>やめる</button>}
+          <button className={`clear-tests ${confirmClear ? "confirm" : ""}`} disabled={clearing || saving} onClick={() => confirmClear ? void clear() : setConfirmClear(true)}>
+            {clearing ? "削除中…" : confirmClear ? "本当にすべて削除する" : "テスト注文を一括削除"}
+          </button>
+          {confirmClear && <small>テスト注文だけを削除します。通常注文は残ります。</small>}
+        </div>
       </div>
       <div className="test-product-grid">
         {items.map((item, index) => (
