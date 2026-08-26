@@ -156,14 +156,14 @@ export default function MenuManager() {
   }
 
   async function toggleSoldOut(item:MenuItem){
-    setMutatingId(item.id);setNotice("");
-    try{const soldOut=!item.soldOut,response=await fetch(`/api/v1/smaregi/catalog/${item.id}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"SET_SOLD_OUT",soldOut})}),body=await response.json()as{error?:string};if(!response.ok)throw new Error(body.error??"売り切れ状態を更新できませんでした");setMenus(current=>current.map(menu=>menu.id===item.id?{...menu,soldOut}:menu));setNotice(soldOut?`${item.name}を売り切れにしました`:`${item.name}の販売を再開しました`)}catch(error){setNotice(error instanceof Error?friendlyError(error.message):"売り切れ状態を更新できませんでした")}finally{setMutatingId(null)}
+    const soldOut=!item.soldOut;setMutatingId(item.id);setMenus(current=>current.map(menu=>menu.id===item.id?{...menu,soldOut}:menu));setNotice(`${item.name}を${soldOut?"売り切れ":"販売中"}へ変更しました。スマレジへ同期中…`);
+    try{const response=await fetch(`/api/v1/smaregi/catalog/${item.id}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"SET_SOLD_OUT",soldOut})}),body=await response.json()as{error?:string};if(!response.ok)throw new Error(body.error??"売り切れ状態を更新できませんでした");setNotice(soldOut?`${item.name}を売り切れにしました`:`${item.name}の販売を再開しました`)}catch(error){setMenus(current=>current.map(menu=>menu.id===item.id?{...menu,soldOut:Boolean(item.soldOut)}:menu));setNotice(error instanceof Error?`同期に失敗したため元に戻しました：${friendlyError(error.message)}`:"同期に失敗したため元に戻しました")}finally{setMutatingId(null)}
   }
 
   async function removeMenu(item:MenuItem){
     if(!window.confirm(`「${item.name}」をスマレジ商品マスタから削除します。元に戻せません。削除しますか？`))return;
-    setMutatingId(item.id);setNotice("");
-    try{const response=await fetch(`/api/v1/smaregi/catalog/${item.id}`,{method:"DELETE"}),body=await response.json()as{error?:string};if(!response.ok)throw new Error(body.error??"商品を削除できませんでした");setMenus(current=>current.filter(menu=>menu.id!==item.id));setNotice(`${item.name}を削除しました`)}catch(error){setNotice(error instanceof Error?friendlyError(error.message):"商品を削除できませんでした")}finally{setMutatingId(null)}
+    setMutatingId(item.id);setMenus(current=>current.filter(menu=>menu.id!==item.id));setNotice(`${item.name}を一覧から削除しました。スマレジへ同期中…`);
+    try{const response=await fetch(`/api/v1/smaregi/catalog/${item.id}`,{method:"DELETE"}),body=await response.json()as{error?:string};if(!response.ok)throw new Error(body.error??"商品を削除できませんでした");setNotice(`${item.name}をスマレジから削除しました`)}catch(error){setMenus(current=>current.some(menu=>menu.id===item.id)?current:[...current,item]);setNotice(error instanceof Error?`削除に失敗したため一覧へ戻しました：${friendlyError(error.message)}`:"削除に失敗したため一覧へ戻しました")}finally{setMutatingId(null)}
   }
 
   if (editing) return (
