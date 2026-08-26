@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { hasSiteSessionRequest } from "@/lib/site-auth";
 import { createSmaregiProduct, getSmaregiCatalog, type SmaregiProductInput } from "@/lib/smaregi";
 import { getSharedCatalog } from "@/lib/shared-catalog";
+import { matchCatalogProduct } from "@/lib/catalog-match";
 
 export const dynamic = "force-dynamic";
 
@@ -11,12 +12,13 @@ export async function GET(request: NextRequest) {
     const shared = await getSharedCatalog();
     const smaregi = await getSmaregiCatalog();
     if (smaregi.environment === "production" && smaregi.products.length > 0) {
-      const sharedByCode = new Map(shared?.products.map((product) => [product.productCode, product]) ?? []);
-      const kitchenProducts = smaregi.products.filter((product) => sharedByCode.has(product.productCode));
+      const sharedProducts=shared?.products??[];
+      const matchedProducts=smaregi.products.map(product=>({product,shared:matchCatalogProduct(product,sharedProducts)})).filter(row=>Boolean(row.shared));
+      const kitchenProducts = matchedProducts.map(row=>row.product);
       const kitchenCategoryIds = new Set(kitchenProducts.map((product) => product.categoryId));
       return NextResponse.json({
         ...smaregi,
-        products: kitchenProducts.map((product) => ({ ...product, ...sharedByCode.get(product.productCode), categoryId: product.categoryId })),
+        products: matchedProducts.map(({product,shared}) => ({ ...product, ...shared, productCode:product.productCode, categoryId: product.categoryId })),
         categories: smaregi.categories.filter((category) => kitchenCategoryIds.has(category.categoryId)),
         source: "smaregi-production",
         readOnly: false,
