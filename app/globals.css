@@ -75,3 +75,28 @@ button { font: inherit; }
 .display-only .call-lane.completed .call-number-list strong{font-size:clamp(96px,13vw,194px);color:#982f20}
 .display-only .call-number-list>p{align-self:center;font-size:clamp(15px,1.7vw,23px);font-weight:800;line-height:1.5}
 @media(max-width:760px){.display-only .customer-call-monitor{height:auto;min-height:100vh;overflow:visible}.display-only .call-status-board{grid-template-columns:1fr}.display-only .call-number-list>div{min-height:130px}}
+
+/* 呼出画面 v2：箱を並べず、番号だけを読む横断ボード */
+.display-only .customer-call-monitor{grid-template-rows:auto minmax(0,1fr);padding:clamp(10px,1.7vh,22px) clamp(12px,2vw,30px)}
+.display-only .customer-call-monitor>header h1{font-size:clamp(30px,4.4vw,56px)}
+.display-only .customer-call-monitor>header span{font-size:clamp(11px,1.35vw,18px)}
+.display-only .call-status-board{display:grid;grid-template-columns:1fr;grid-template-rows:auto minmax(0,1fr);gap:clamp(10px,1.5vh,18px);margin-top:clamp(10px,1.5vh,18px)}
+.display-only .call-status-board:has(.completed.has-items){grid-template-rows:minmax(150px,1.15fr) minmax(130px,.85fr)}
+.display-only .call-lane{display:grid;grid-template-columns:clamp(170px,25vw,300px) minmax(0,1fr);grid-template-rows:1fr;min-height:0;border:0;border-radius:12px;box-shadow:none}
+.display-only .call-lane>header{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;border-radius:12px 0 0 12px;padding:12px;text-align:center}
+.display-only .call-lane>header span{font-size:clamp(11px,1.25vw,17px);letter-spacing:.06em}
+.display-only .call-lane>header h2{font-size:clamp(25px,3.2vw,43px)}
+.display-only .call-lane.completed.empty{min-height:clamp(78px,11vh,110px)}
+.display-only .call-lane.completed.empty>header h2{font-size:clamp(22px,2.7vw,36px)}
+.display-only .call-number-list,.display-only .call-lane.completed .call-number-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));grid-auto-rows:minmax(0,1fr);align-items:stretch;gap:clamp(7px,1vw,13px);min-height:0;height:100%;overflow:hidden;padding:clamp(7px,1vw,14px);border-radius:0 12px 12px 0;background:#e9f0ec}
+.display-only .call-lane.completed .call-number-list{grid-template-columns:repeat(auto-fit,minmax(180px,1fr));background:#fff0ea}
+.display-only .call-lane.empty .call-number-list{display:flex;align-items:center;justify-content:center;padding:10px 18px}
+.display-only .call-number-list>div{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:0;height:100%;padding:6px 10px;border:0;border-radius:10px;background:#fff;box-shadow:inset 0 0 0 2px #cfdbd4}
+.display-only .call-number-list>div.food{border:0;box-shadow:inset 0 0 0 3px #c86a50}
+.display-only .call-number-list>div.drink{border:0;box-shadow:inset 0 0 0 3px #4d82b5}
+.display-only .call-number-list small{width:auto;font-size:clamp(12px,1.35vw,18px);line-height:1;color:#53625a;letter-spacing:.03em}
+.display-only .call-number-list strong{font-size:clamp(72px,10vw,148px);line-height:.8;color:#173e2e}
+.display-only .call-lane.completed .call-number-list>div{border:0;background:#fff;box-shadow:inset 0 0 0 4px #d4543d}
+.display-only .call-lane.completed .call-number-list strong{font-size:clamp(88px,12.5vw,184px);color:#a52f20}
+.display-only .call-number-list>p{font-size:clamp(13px,1.5vw,20px);color:#64726b}
+@media(max-width:650px){.display-only .call-lane{grid-template-columns:1fr;grid-template-rows:auto 1fr}.display-only .call-lane>header{border-radius:12px 12px 0 0}.display-only .call-number-list,.display-only .call-lane.completed .call-number-list{border-radius:0 0 12px 12px}.display-only .call-status-board{grid-template-rows:auto auto}}
