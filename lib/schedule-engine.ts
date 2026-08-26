@@ -5,7 +5,7 @@ export type EstimateInput = { requestId: string; orderId?: string; items: Estima
 export const CALCULATION_VERSION = "aok-v1.1-microwave-serial";
 export const SHARED_CARBONARA_SAUCE_600W_SECONDS=50;
 
-export function microwaveSeconds(item:EstimateItem){const text=`${item.productCode??""} ${item.name??""}`.toLowerCase(),quantity=Math.max(1,item.quantity);let seconds=0;if(/カルボナーラ.*パスタ|パスタ.*カルボナーラ|carbonara.*pasta/.test(text))seconds=190+SHARED_CARBONARA_SAUCE_600W_SECONDS;else if(/濃厚魚介つけ麺|つけ麺|tsukemen|tukemen/.test(text))seconds=180+40;else if(/贅沢ポテト/.test(text))seconds=SHARED_CARBONARA_SAUCE_600W_SECONDS;else if(/ほうとう/.test(text))seconds=720;else if(/うどん/.test(text))seconds=360;else if(/角煮丼/.test(text))seconds=120;else if(/煮カツ丼|カツ丼/.test(text))seconds=180;return seconds*quantity}
+export function microwaveSeconds(item:EstimateItem){const text=`${item.productCode??""} ${item.name??""}`.toLowerCase(),quantity=Math.max(1,item.quantity);let seconds=0;if(/カルボナーラ.*パスタ|パスタ.*カルボナーラ|carbonara.*pasta/.test(text))seconds=190+SHARED_CARBONARA_SAUCE_600W_SECONDS;else if(/濃厚魚介つけ麺|つけ麺|tsukemen|tukemen/.test(text))seconds=180+40;else if(/贅沢ポテト/.test(text))seconds=SHARED_CARBONARA_SAUCE_600W_SECONDS;else if(/ほうとう/.test(text))seconds=720;else if(/うどん/.test(text))seconds=360;else if(/角煮丼/.test(text))seconds=40;else if(/煮カツ丼|カツ丼/.test(text))seconds=180;return seconds*quantity}
 
 function foodMinutes(item: EstimateItem) {
   const configured = Number(item.preparationMinutes);

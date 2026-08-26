@@ -27,6 +27,10 @@ test("受付済み注文のレンジ占有時間を加算する",()=>{
   assert.equal(occupied.inputs.activeMicrowaveSeconds,240);
 });
 
+test("角煮丼は天かすを載せた状態で1000W 40秒として計上する",()=>{
+  assert.equal(microwaveSeconds({name:"角煮丼",department:"FOOD",quantity:1}),40);
+});
+
 test("かき氷は受信区分がDRINKでもフード提供時間として計算する",()=>{
   const result=calculateSchedule({requestId:"kakigori",orderedAt:"2026-08-26T12:00:00+09:00",items:[{name:"かき氷 いちご",department:"DRINK",quantity:1}]},5,0,0);
   assert.ok(result.foodReadyAt);
