@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 async function render() {
@@ -19,4 +20,10 @@ test("キッチンモニターをサーバーレンダリングする", async ()
   assert.match(html, /認証を確認しています/);
   assert.doesNotMatch(html, /codex-preview/);
   assert.doesNotMatch(html, /react-loading-skeleton/);
+});
+
+test("ちょこっとライスを150gとして調理指示する",async()=>{
+  const source=await readFile(new URL("../app/kitchen-board.tsx",import.meta.url),"utf8");
+  assert.match(source,/ちょこっとライス\|少なめ\|150g/);
+  assert.match(source,/riceGrams\(names\(unit\),unit\.items\[0\]\?\.options\)/);
 });
