@@ -43,3 +43,14 @@ test("決済完了後の確定計算では対象注文自身を混雑から除�
   assert.match(route,/liveKitchenLoad\(orderId\)/);
   assert.match(store,/unit\.orderId!==excludeOrderId/);
 });
+
+test("フライヤー標準を200℃4分で統一する",async()=>{
+  const [board,master]=await Promise.all([
+    readFile(new URL("../app/kitchen-board.tsx",import.meta.url),"utf8"),
+    readFile(new URL("../app/cooking-master.tsx",import.meta.url),"utf8"),
+  ]);
+  assert.match(board,/200℃に到達/);
+  assert.match(board,/200℃で4分/);
+  assert.match(master,/揚げ物基本 200℃・4分/);
+  assert.doesNotMatch(master,/180℃/);
+});

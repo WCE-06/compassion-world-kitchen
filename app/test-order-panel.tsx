@@ -10,8 +10,8 @@ type Item = {
 };
 
 const presets: Omit<Item, "quantity">[] = [
-  { name: "和風からあげ丼", department: "FOOD", preparationMinutes: 8 },
-  { name: "フリフリポテト", department: "FOOD", preparationMinutes: 8 },
+  { name: "和風からあげ丼", department: "FOOD", preparationMinutes: 6 },
+  { name: "フリフリポテト", department: "FOOD", preparationMinutes: 6 },
   { name: "角煮丼", department: "FOOD", preparationMinutes: 8 },
   { name: "カルボナーラパスタ", department: "FOOD", preparationMinutes: 9 },
   { name: "濃厚魚介つけ麺", department: "FOOD", preparationMinutes: 10 },

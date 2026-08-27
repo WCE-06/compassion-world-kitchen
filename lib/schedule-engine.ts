@@ -2,7 +2,7 @@ export type ServingMode = "WITH_FOOD" | "AS_SOON_AS_POSSIBLE" | "DRINK_FIRST";
 export type EstimateItem = { productId?: string; productCode?: string; name?: string; quantity: number; department?: "FOOD" | "DRINK"; preparationMinutes?: number; options?: { preparationMinutesDelta?: number }[] };
 export type EstimateInput = { requestId: string; orderId?: string; items: EstimateItem[]; orderedAt?: string; servingMode?: ServingMode; serviceType?: "EAT_IN" | "TAKEOUT"; kitchen?: { activeFoodOrders?: number; fryerBatches?: number; fryerPreheated?:boolean; microwaveContainers?: number; activeMicrowaveSeconds?:number } };
 
-export const CALCULATION_VERSION = "aok-v1.2-fryer-preheat";
+export const CALCULATION_VERSION = "aok-v1.3-fryer-200c-4m";
 export const SHARED_CARBONARA_SAUCE_600W_SECONDS=50;
 export const FRYER_PREHEAT_MINUTES=10;
 
@@ -19,8 +19,8 @@ function foodMinutes(item: EstimateItem) {
   if (/ほうとう|houtou/.test(text)) return 15;
   if (/うどん|udon/.test(text)) return 10;
   if (/つけ麺|tsukemen|tukemen/.test(text)) return 10;
-  if (/唐揚げ丼|からあげ丼|karaage.*don/.test(text)) return 8;
-  if (/唐揚げ|からあげ|フライドチキン|チーズドッグ|たこ焼|ポテト|karaage|fried|cheese.*dog|takoyaki|poteto/.test(text)) return 8;
+  if (/唐揚げ丼|からあげ丼|karaage.*don/.test(text)) return 6;
+  if (/唐揚げ|からあげ|フライドチキン|チーズドッグ|たこ焼|ポテト|karaage|fried|cheese.*dog|takoyaki|poteto/.test(text)) return 6;
   if (/角煮丼|kakuni/.test(text)) return 8;
   if (/カツ丼|katsu/.test(text)) return 7;
   if (/かき氷|kakigori/.test(text)) return 6;
