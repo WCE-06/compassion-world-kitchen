@@ -27,3 +27,11 @@ test("ドリンクへ紛れたかき氷はデザートへ戻す",()=>{
 test("明確な料理名がない商品は既存の正しいカテゴリーを維持する",()=>{
   assert.equal(normalizedMenuCategory("フライドチキン","food-side"),"food-side");
 });
+
+test("割材名を含む酒類をソフトドリンクへ混入させない",()=>{
+  assert.equal(normalizedMenuCategory("ウーロンハイ(角)","soft-simple"),"alcohol-main");
+  assert.equal(normalizedMenuCategory("ラムネ割り(芋)","soft-simple"),"alcohol-main");
+  assert.equal(normalizedMenuCategory("カシスウーロン","soft-simple"),"alcohol-cocktail");
+  assert.equal(normalizedMenuCategory("カルーアミルク","soft-simple"),"alcohol-cocktail");
+  assert.equal(normalizedMenuCategory("瓶ビール(ノンアル)","alcohol-main"),"soft-simple");
+});
