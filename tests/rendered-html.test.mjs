@@ -27,3 +27,12 @@ test("ちょこっとライスを150gとして調理指示する",async()=>{
   assert.match(source,/ちょこっとライス\|少なめ\|150g/);
   assert.match(source,/riceGrams\(names\(unit\),unit\.items\[0\]\?\.options\)/);
 });
+
+test("旧モニターの録音済み音声で注文通知と番号呼出を行う",async()=>{
+  const source=await readFile(new URL("../app/kitchen-board.tsx",import.meta.url),"utf8");
+  assert.match(source,/order_received\.mp3/);
+  assert.match(source,/complete_intro\.mp3/);
+  assert.match(source,/number_customer\.mp3/);
+  await readFile(new URL("../public/audio/legacy/order_received.mp3",import.meta.url));
+  await readFile(new URL("../public/audio/legacy/complete_outro.mp3",import.meta.url));
+});
