@@ -35,3 +35,8 @@ test("割材名を含む酒類をソフトドリンクへ混入させない",()=
   assert.equal(normalizedMenuCategory("カルーアミルク","soft-simple"),"alcohol-cocktail");
   assert.equal(normalizedMenuCategory("瓶ビール(ノンアル)","alcohol-main"),"soft-simple");
 });
+
+test("いちごミルクをカフェへ分類する",()=>{
+  assert.equal(normalizedMenuCategory("特製いちごミルク","soft-simple"),"soft-cafe");
+  assert.equal(normalizedMenuCategory("大人のいちごミルク","soft-simple"),"alcohol-cocktail");
+});

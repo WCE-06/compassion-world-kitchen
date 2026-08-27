@@ -9,7 +9,7 @@ export function normalizedMenuCategory(name:string,current?:string){
   if(/ノンアル/.test(text))return"soft-simple";
   if(/カクテル|カシス|カルーア|テキーラ|ファジーネーブル|レゲエパンチ|スミス・アンド・ウエッソン|ブレイブ・ブル|ビアコーク|大人の(?:いちごミルク|レモネード)|^(?:ストロベリー|ピーチ)|レモン(?:オレンジ|コーク)/.test(text))return"alcohol-cocktail";
   if(/ビール|ハイボール|(?:ウーロン|緑茶|コーク)ハイ|サワー|焼酎|日本酒|ワイン|梅酒|泡盛|ウイスキー|バーボン|アルコール|(?:オレンジ|カルピス|ミルク|ラムネ|水)割り\((?:芋|麦|角|バーボン)\)/.test(text))return"alcohol-main";
-  if(/コーヒー|カフェラテ|カフェオレ|エスプレッソ|紅茶|ココア|ティー/.test(text))return"soft-cafe";
+  if(/コーヒー|カフェラテ|カフェオレ|エスプレッソ|紅茶|ココア|ティー|いちごミルク/.test(text))return"soft-cafe";
   if(/レモネード|ファンタ|スプライト|ジンジャーエール|カルピス|コーラ|ジュース|ソーダ|ラムネ|サイダー|ウーロン|緑茶|ほうじ茶|麦茶|ミルク|ドリンク|ウォーター|お茶/.test(text))return"soft-simple";
   if(/つけ麺/.test(text))return"food-tsukemen";
   if(/うどん|ほうとう/.test(text))return"food-udon";
