@@ -54,7 +54,7 @@ export default function KitchenBoard({ displayOnly = false }: { displayOnly?: bo
     setOptimizerHistory(current=>current.slice(0,-1));
     setOptimizerFocus(taskId);
   };
-  const [lastSync, setLastSync] = useState<Date | null>(null), previousCalled = useRef(new Set<string>()), calledInitialized = useRef(false), knownUnits = useRef(new Set<string>()), ordersInitialized = useRef(false), pendingNewOrders = useRef(new Map<string,Fulfillment[]>());
+  const [lastSync, setLastSync] = useState<Date | null>(null), previousCalled = useRef(new Set<string>()), calledInitialized = useRef(false), knownUnits = useRef(new Set<string>()), ordersInitialized = useRef(false), pendingNewOrders = useRef(new Map<string,Fulfillment[]>()), monitorStartedAt = useRef(Date.now());
   const [audioEnabled, setAudioEnabled] = useState(false), [bgmEnabled, setBgmEnabled] = useState(true), [testingFull, setTestingFull] = useState(false), [audioStatus, setAudioStatus] = useState(`音声は停止中です・${volumeLabel()}`);
   const bgmRef = useRef<HTMLAudioElement | null>(null), bgmContextRef = useRef<AudioContext | null>(null), bgmGainRef = useRef<GainNode | null>(null), bgmSourceRef = useRef<MediaElementAudioSourceNode | null>(null), audioQueue = useRef(Promise.resolve()), audioEnabledRef = useRef(false), bgmEnabledRef = useRef(true);
 
@@ -87,8 +87,10 @@ export default function KitchenBoard({ displayOnly = false }: { displayOnly?: bo
     try {
       await prepareBgm(bgm);
       if (bgmEnabled) await bgm.play();
-      audioEnabledRef.current = true; setAudioEnabled(true); setAudioStatus(`音声・BGM 稼働中・${volumeLabel()}`);
-    } catch { audioEnabledRef.current = true; setAudioEnabled(true); setAudioStatus(`呼出音声は稼働中・${volumeLabel()}`); }
+      audioEnabledRef.current = true; setAudioEnabled(true); localStorage.setItem("aozora-kitchen-audio-ready","1");
+      await speak("音声を開始しました。新しい注文と呼び出し番号をお知らせします。");
+      setAudioStatus(`音声・BGM 稼働中・${volumeLabel()}`);
+    } catch { audioEnabledRef.current = true; setAudioEnabled(true); await speak("呼び出し音声を開始しました。"); setAudioStatus(`呼出音声は稼働中・${volumeLabel()}`); }
     flushPendingNewOrders();
   }
 
@@ -124,6 +126,7 @@ export default function KitchenBoard({ displayOnly = false }: { displayOnly?: bo
     if (!audioEnabledRef.current) {
       const orderId=items[0].orderId,current=pendingNewOrders.current.get(orderId)??[],known=new Set(current.map(item=>item.id));
       pendingNewOrders.current.set(orderId,[...current,...items.filter(item=>!known.has(item.id))]);
+      try { localStorage.setItem("aozora-kitchen-pending-announcements",JSON.stringify([...pendingNewOrders.current.entries()])); } catch { /* 放送待ちはメモリで保持 */ }
       setAudioStatus(`新しい注文が${pendingNewOrders.current.size}件あります。『音声・BGMを開始』を押してください`);
       return;
     }
@@ -141,6 +144,7 @@ export default function KitchenBoard({ displayOnly = false }: { displayOnly?: bo
     if (!audioEnabledRef.current || !pendingNewOrders.current.size) return;
     const queued=[...pendingNewOrders.current.values()];
     pendingNewOrders.current.clear();
+    try { localStorage.removeItem("aozora-kitchen-pending-announcements"); } catch { /* 放送は継続 */ }
     queued.forEach(announceNewOrder);
   }
 
@@ -163,12 +167,14 @@ export default function KitchenBoard({ displayOnly = false }: { displayOnly?: bo
       if (!foodResponse.ok || !drinkResponse.ok) throw new Error(food.error ?? drink.error ?? "注文を取得できませんでした");
       const next = normalizeKitchenDepartments(food.units ?? [], drink.units ?? []);
       const active = [...next.FOOD, ...next.DRINK];
-      if (!displayOnly && ordersInitialized.current) {
+      if (!displayOnly) {
         const freshOrders = new Map<string, Fulfillment[]>();
-        active.filter((item) => item.status === "ACCEPTED" && !knownUnits.current.has(item.id)).forEach((item) => freshOrders.set(item.orderId, [...(freshOrders.get(item.orderId) ?? []), item]));
+        active.filter((item) => item.status === "ACCEPTED" && !knownUnits.current.has(item.id) && (ordersInitialized.current || item.updatedAt >= monitorStartedAt.current - 2_000)).forEach((item) => freshOrders.set(item.orderId, [...(freshOrders.get(item.orderId) ?? []), item]));
         freshOrders.forEach((items) => announceNewOrder(items));
       }
-      active.forEach((item) => knownUnits.current.add(item.id)); ordersInitialized.current = true;
+      active.forEach((item) => knownUnits.current.add(item.id));
+      try { localStorage.setItem("aozora-kitchen-known-units",JSON.stringify([...knownUnits.current].slice(-500))); } catch { /* 音声検知は継続 */ }
+      ordersInitialized.current = true;
       const called = new Set([...next.FOOD, ...next.DRINK].filter((item) => item.status === "CALLED").map((item) => item.id));
       if (!displayOnly && calledInitialized.current) [...next.FOOD, ...next.DRINK].filter((item) => item.status === "CALLED" && !previousCalled.current.has(item.id)).forEach(announce);
       calledInitialized.current = true;
@@ -177,7 +183,7 @@ export default function KitchenBoard({ displayOnly = false }: { displayOnly?: bo
     finally { setLoading(false); }
   }
 
-  useEffect(() => { void load(); const timer = window.setInterval(() => void load(true), 4000); return () => window.clearInterval(timer); }, []);
+  useEffect(() => { try { const saved=JSON.parse(localStorage.getItem("aozora-kitchen-known-units")??"[]");if(Array.isArray(saved))knownUnits.current=new Set(saved.filter(value=>typeof value==="string"));const pending=JSON.parse(localStorage.getItem("aozora-kitchen-pending-announcements")??"[]");if(Array.isArray(pending))pendingNewOrders.current=new Map(pending); } catch { /* 初回起動として継続 */ } void load(); const timer = window.setInterval(() => void load(true), 4000); return () => window.clearInterval(timer); }, []);
   useEffect(() => { const timer = window.setInterval(() => { if (bgmRef.current && bgmEnabledRef.current) setBgmVolume(bgmVolume()); }, 30000); return () => window.clearInterval(timer); }, []);
 
   async function act(item: Fulfillment, action: "START" | "STEP" | "CALL" | "PICKUP" | "RESTORE_CALL") {
@@ -270,6 +276,6 @@ async function playLegacyCall(item: Fulfillment) {
   await speak(`お待たせいたしました。${department}番号、${number}番のお客様。${number}番のお客様。商品ができあがりました。受け取りカウンターまでお越しください。`);
   playLegacyChime(); await wait(650);
 }
-function speak(text: string) { return new Promise<void>((resolve) => { if (!("speechSynthesis" in window)) { resolve(); return; } const utterance = new SpeechSynthesisUtterance(text); utterance.lang = "ja-JP"; utterance.rate = .88; utterance.pitch = 1; utterance.volume = scheduledVolume(); const voices = window.speechSynthesis.getVoices(); utterance.voice = voices.find((voice) => voice.lang.startsWith("ja")) ?? null; utterance.onend = () => resolve(); utterance.onerror = () => resolve(); window.speechSynthesis.speak(utterance); }); }
+function speak(text: string) { return new Promise<void>((resolve) => { if (!("speechSynthesis" in window)) { resolve(); return; } const engine=window.speechSynthesis,utterance = new SpeechSynthesisUtterance(text); utterance.lang = "ja-JP"; utterance.rate = .88; utterance.pitch = 1; utterance.volume = scheduledVolume(); const voices = engine.getVoices(); utterance.voice = voices.find((voice) => voice.lang.startsWith("ja")) ?? null;let done=false;const finish=()=>{if(done)return;done=true;resolve()};utterance.onend=finish;utterance.onerror=finish;engine.resume();engine.speak(utterance);window.setTimeout(finish,Math.max(8_000,text.length*450)); }); }
 function playLegacyChime() { try { const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext; const context = new AudioContextClass(), peak = .13 * scheduledVolume(), floor = Math.max(0.0000000001, peak / 1000); [659, 784, 988].forEach((frequency, index) => { const oscillator = context.createOscillator(), gain = context.createGain(), start = context.currentTime + index * .14; oscillator.type = "sine"; oscillator.frequency.value = frequency; gain.gain.setValueAtTime(floor, start); gain.gain.exponentialRampToValueAtTime(peak, start + .02); gain.gain.exponentialRampToValueAtTime(floor, start + .32); oscillator.connect(gain); gain.connect(context.destination); oscillator.start(start); oscillator.stop(start + .34); }); } catch { /* 表示は継続 */ } }
 function wait(ms: number) { return new Promise((resolve) => window.setTimeout(resolve, ms)); }
