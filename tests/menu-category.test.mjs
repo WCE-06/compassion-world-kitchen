@@ -40,3 +40,9 @@ test("いちごミルクをカフェへ分類する",()=>{
   assert.equal(normalizedMenuCategory("特製いちごミルク","soft-simple"),"soft-cafe");
   assert.equal(normalizedMenuCategory("大人のいちごミルク","soft-simple"),"alcohol-cocktail");
 });
+
+test("単品のライス3サイズはサイドへ分類する",()=>{
+  assert.equal(normalizedMenuCategory("ちょこっとライス","food-don"),"food-side");
+  assert.equal(normalizedMenuCategory("普通ライス","food-don"),"food-side");
+  assert.equal(normalizedMenuCategory("大盛ライス","food-don"),"food-side");
+});

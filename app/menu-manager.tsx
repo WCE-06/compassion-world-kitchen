@@ -7,6 +7,7 @@ type MenuItem = {
   name: string;
   code: string;
   price: number;
+  taxDivision: "0" | "1";
   category: "FOOD" | "DRINK";
   smaregiCategoryId: string;
   image?: string;
@@ -18,7 +19,7 @@ type MenuItem = {
 };
 type Category = { categoryId: string; categoryName: string };
 type CatalogResponse = {
-  products?: { productId: string; categoryId: string; productCode: string; productName: string; price: string; displayFlag?:string; imageUrl?: string; soldOut?: boolean; menuCategory?: string; displaySequence?: number | string; showOnSelfRegister?: boolean; showOnMobileOrder?: boolean }[];
+  products?: { productId: string; categoryId: string; productCode: string; productName: string; price: string; taxDivision?: "0" | "1"; displayFlag?:string; imageUrl?: string; soldOut?: boolean; menuCategory?: string; displaySequence?: number | string; showOnSelfRegister?: boolean; showOnMobileOrder?: boolean }[];
   categories?: Category[];
   environment?: "sandbox" | "production";
   source?: "shared-catalog" | "smaregi-production";
@@ -61,6 +62,7 @@ export default function MenuManager() {
         name: item.productName,
         code: item.productCode,
         price: Number(item.price),
+        taxDivision: item.taxDivision ?? "0",
         category: "FOOD",
         smaregiCategoryId: item.categoryId,
         image: item.imageUrl || undefined,
@@ -83,7 +85,7 @@ export default function MenuManager() {
   useEffect(() => { void loadCatalog(); }, []);
 
   function openForm(item?: MenuItem) {
-    setEditing(item ? { ...item } : { id: "", name: "", code: "", price: 0, category: "FOOD", smaregiCategoryId: categories[0]?.categoryId ?? "", menuCategory, displaySequence: 999999999, published: true, status: "DRAFT" });
+    setEditing(item ? { ...item } : { id: "", name: "", code: "", price: 0, taxDivision: "1", category: "FOOD", smaregiCategoryId: categories[0]?.categoryId ?? "", menuCategory, displaySequence: 999999999, published: true, status: "DRAFT" });
     setNotice("");
   }
 
@@ -143,7 +145,7 @@ export default function MenuManager() {
       const response = await fetch(existing ? `/api/v1/smaregi/catalog/${editing.id}` : "/api/v1/smaregi/catalog", {
         method: existing ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ categoryId: editing.smaregiCategoryId, productCode: editing.code, productName: editing.name, price: editing.price, soldOut:editing.soldOut }),
+        body: JSON.stringify({ categoryId: editing.smaregiCategoryId, productCode: editing.code, productName: editing.name, price: editing.price, taxDivision: editing.taxDivision, soldOut:editing.soldOut }),
       });
       const body = await response.json() as { error?: string };
       if (!response.ok) throw new Error(body.error ?? "スマレジ更新に失敗しました");
@@ -199,12 +201,13 @@ export default function MenuManager() {
           <label>商品名<input value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} placeholder="例：季節野菜のカレー" /></label>
           <div className="field-row">
             <label>商品コード<input value={editing.code} onChange={(e) => setEditing({ ...editing, code: e.target.value })} placeholder="CW-1003" /></label>
-            <label>税込価格<div className="price-input"><span>¥</span><input type="number" min="0" step="1" value={editing.price || ""} onChange={(e) => setEditing({ ...editing, price: Number(e.target.value) })} /></div></label>
+            <label>{editing.taxDivision === "1" ? "税抜価格" : "税込価格"}<div className="price-input"><span>¥</span><input type="number" min="0" step="1" value={editing.price || ""} onChange={(e) => setEditing({ ...editing, price: Number(e.target.value) })} /></div></label>
           </div>
+          <label>価格の税区分<select value={editing.taxDivision} onChange={(e) => setEditing({ ...editing, taxDivision: e.target.value as "0" | "1" })}><option value="1">税抜価格＋税</option><option value="0">税込価格</option></select></label>
           <label>スマレジ部門<select value={editing.smaregiCategoryId} onChange={(e) => setEditing({ ...editing, smaregiCategoryId: e.target.value })}><option value="">部門を選択</option>{categories.map((category) => <option value={category.categoryId} key={category.categoryId}>{category.categoryName}</option>)}</select></label>
           <label>キッチン区分<select value={editing.category} onChange={(e) => setEditing({ ...editing, category: e.target.value as "FOOD" | "DRINK" })}><option value="FOOD">フード</option><option value="DRINK">ドリンク</option></select></label>
           <label>メニュー説明<textarea rows={4} placeholder="素材や味わいなど、お客様向けの説明を入力" /></label>
-          <div className="publish-note"><b>スマレジへ直接反映</b><p>商品名・商品コード・税込価格・部門をスマレジ商品マスタへ登録または更新します。</p></div>
+          <div className="publish-note"><b>スマレジへ直接反映</b><p>商品名・商品コード・価格・税区分・部門をスマレジ商品マスタへ登録または更新します。</p></div>
         </div>
       </div>
       {notice && <p className="form-notice" role="alert">{notice}</p>}

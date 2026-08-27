@@ -15,6 +15,7 @@ export type SmaregiProduct = {
   price: string;
   displayFlag: string;
   division: string;
+  taxDivision?: "0" | "1";
   displaySequence?: string;
 };
 
@@ -29,6 +30,7 @@ export type SmaregiProductInput = {
   productCode: string;
   productName: string;
   price: number;
+  taxDivision?: "0" | "1";
   soldOut?: boolean;
 };
 
@@ -100,7 +102,7 @@ function productPayload(input: SmaregiProductInput) {
     categoryId: input.categoryId,
     productCode: input.productCode.trim(),
     productName: input.productName.trim(),
-    taxDivision: "0",
+    taxDivision: input.taxDivision ?? "0",
     productPriceDivision: "1",
     price: String(input.price),
     displayFlag: input.soldOut ? "0" : "1",
