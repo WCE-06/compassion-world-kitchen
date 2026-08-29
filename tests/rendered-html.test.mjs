@@ -38,6 +38,10 @@ test("旧モニターの録音済み音声で注文通知と番号呼出を行�
   assert.match(source,/decodeAudioData/);
   assert.match(source,/新しい注文が入りました。注文内容を確認してください/);
   assert.match(source,/audioQueue\.current\.catch/);
+  assert.match(source,/ANNOUNCEMENT_GAIN = 1\.2/);
+  assert.match(source,/announcementActiveRef\.current/);
+  assert.match(source,/setBgmVolume\(0\)/);
+  assert.match(source,/source\.onended/);
 });
 
 test("決済完了後の確定計算では対象注文自身を混雑から除外する",async()=>{
