@@ -114,12 +114,13 @@ export default function KitchenBoard({ displayOnly = false }: { displayOnly?: bo
   function announce(item: Fulfillment) {
     if (!audioEnabledRef.current) { setAudioStatus("呼出があります。『音声・BGMを開始』を押してください"); return; }
     const label = `${item.department === "FOOD" ? "フード" : "ドリンク"} ${String(item.callNumber).padStart(3, "0")}`;
-    audioQueue.current = audioQueue.current.then(async () => {
+    audioQueue.current = audioQueue.current.catch(()=>undefined).then(async () => {
       setAudioStatus(`放送中：${label}`);
       if (bgmRef.current && bgmEnabledRef.current) setBgmVolume(Math.min(bgmVolume(), BGM_DUCK_VOLUME));
-      await playLegacyCall(item);
-      if (bgmRef.current && bgmEnabledRef.current) setBgmVolume(bgmVolume());
-      setAudioStatus(`音声・BGM 稼働中・${volumeLabel()}`);
+      try{await playLegacyCall(item)}catch{await speak(`${label}番のお客様、商品ができあがりました。受取カウンターまでお越しください。`)}finally{
+        if (bgmRef.current && bgmEnabledRef.current) setBgmVolume(bgmVolume());
+        setAudioStatus(`音声・BGM 稼働中・${volumeLabel()}`);
+      }
     });
   }
 
@@ -133,12 +134,13 @@ export default function KitchenBoard({ displayOnly = false }: { displayOnly?: bo
       return;
     }
     const numbers = items.map((item) => `${item.department === "FOOD" ? "フード" : "ドリンク"}番号、${String(item.callNumber).padStart(3, "0")}番`).join("、");
-    audioQueue.current = audioQueue.current.then(async () => {
+    audioQueue.current = audioQueue.current.catch(()=>undefined).then(async () => {
       setAudioStatus(`新規注文：${numbers}`);
       if (bgmRef.current && bgmEnabledRef.current) setBgmVolume(Math.min(bgmVolume(), BGM_DUCK_VOLUME));
-      await playLegacyFiles(["chime_start.mp3", "order_received.mp3", "chime_end.mp3"]);
-      if (bgmRef.current && bgmEnabledRef.current) setBgmVolume(bgmVolume());
-      setAudioStatus(`音声・BGM 稼働中・${volumeLabel()}`);
+      try{await playLegacyFiles(["chime_start.mp3", "order_received.mp3", "chime_end.mp3"])}catch{await speak("新しい注文が入りました。注文内容を確認してください。")}finally{
+        if (bgmRef.current && bgmEnabledRef.current) setBgmVolume(bgmVolume());
+        setAudioStatus(`音声・BGM 稼働中・${volumeLabel()}`);
+      }
     });
   }
 
@@ -286,8 +288,12 @@ async function playLegacyCall(item: Fulfillment) {
 }
 function legacyNumberFiles(callNumber:number){const number=Math.trunc(callNumber);if(number<=0||number>999)return[];const hundreds=Math.floor(number/100)*100,rest=number%100,files:string[]=[];if(hundreds)files.push(`${hundreds}.mp3`);if(rest)files.push(`${rest}.mp3`);return files}
 function legacyVoiceUrl(file:string){return `${LEGACY_VOICE_BASE}/${encodeURIComponent(file)}`}
-function warmUpLegacyVoice(){["chime_start.mp3","chime_end.mp3","order_received.mp3","complete_intro.mp3","complete_outro.mp3","number_customer.mp3"].forEach(file=>{const audio=new Audio(legacyVoiceUrl(file));audio.preload="auto";audio.load()})}
-async function playLegacyFiles(files:string[]){const audios=files.map(file=>{const audio=new Audio(legacyVoiceUrl(file));audio.preload="auto";audio.volume=scheduledVolume();return audio});for(const audio of audios)await new Promise<void>((resolve,reject)=>{audio.onloadedmetadata=()=>resolve();audio.onerror=()=>reject(new Error("LEGACY_AUDIO_LOAD_FAILED"));audio.load()});for(let index=0;index<audios.length;index++){const audio=audios[index];await audio.play();if(index===audios.length-1){await new Promise<void>(resolve=>{audio.onended=()=>resolve()});continue}await wait(Math.max(0,(audio.duration-LEGACY_OVERLAP_SECONDS)*1000))}}
+let legacyVoiceContext:AudioContext|null=null;
+const legacyVoiceBuffers=new Map<string,AudioBuffer>();
+async function getLegacyVoiceContext(){if(!legacyVoiceContext){const AudioContextClass=window.AudioContext||(window as unknown as{webkitAudioContext:typeof AudioContext}).webkitAudioContext;if(!AudioContextClass)throw new Error("LEGACY_AUDIO_CONTEXT_UNAVAILABLE");legacyVoiceContext=new AudioContextClass()}if(legacyVoiceContext.state==="suspended")await legacyVoiceContext.resume();return legacyVoiceContext}
+async function loadLegacyVoiceBuffer(file:string){const cached=legacyVoiceBuffers.get(file);if(cached)return cached;const context=await getLegacyVoiceContext(),response=await fetch(legacyVoiceUrl(file),{cache:"force-cache"});if(!response.ok)throw new Error(`LEGACY_AUDIO_LOAD_FAILED:${file}`);const buffer=await context.decodeAudioData(await response.arrayBuffer());legacyVoiceBuffers.set(file,buffer);return buffer}
+function warmUpLegacyVoice(){void Promise.all(["chime_start.mp3","chime_end.mp3","order_received.mp3","complete_intro.mp3","complete_outro.mp3","number_customer.mp3"].map(loadLegacyVoiceBuffer)).catch(()=>undefined)}
+async function playLegacyFiles(files:string[]){const context=await getLegacyVoiceContext(),buffers=await Promise.all(files.map(loadLegacyVoiceBuffer)),gain=context.createGain();gain.gain.value=scheduledVolume();gain.connect(context.destination);let cursor=context.currentTime+.05,endAt=cursor;buffers.forEach((buffer,index)=>{const source=context.createBufferSource();source.buffer=buffer;source.connect(gain);source.start(cursor);endAt=Math.max(endAt,cursor+buffer.duration);if(index<buffers.length-1)cursor+=Math.max(0,buffer.duration-LEGACY_OVERLAP_SECONDS)});await wait(Math.max(0,(endAt-context.currentTime)*1000)+100);gain.disconnect()}
 function speak(text: string) { return new Promise<void>((resolve) => { if (!("speechSynthesis" in window)) { resolve(); return; } const engine=window.speechSynthesis,utterance = new SpeechSynthesisUtterance(text); utterance.lang = "ja-JP"; utterance.rate = .88; utterance.pitch = 1; utterance.volume = scheduledVolume(); const voices = engine.getVoices(); utterance.voice = voices.find((voice) => voice.lang.startsWith("ja")) ?? null;let done=false;const finish=()=>{if(done)return;done=true;resolve()};utterance.onend=finish;utterance.onerror=finish;engine.resume();engine.speak(utterance);window.setTimeout(finish,Math.max(8_000,text.length*450)); }); }
 function playLegacyChime() { try { const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext; const context = new AudioContextClass(), peak = .13 * scheduledVolume(), floor = Math.max(0.0000000001, peak / 1000); [659, 784, 988].forEach((frequency, index) => { const oscillator = context.createOscillator(), gain = context.createGain(), start = context.currentTime + index * .14; oscillator.type = "sine"; oscillator.frequency.value = frequency; gain.gain.setValueAtTime(floor, start); gain.gain.exponentialRampToValueAtTime(peak, start + .02); gain.gain.exponentialRampToValueAtTime(floor, start + .32); oscillator.connect(gain); gain.connect(context.destination); oscillator.start(start); oscillator.stop(start + .34); }); } catch { /* 表示は継続 */ } }
 function wait(ms: number) { return new Promise((resolve) => window.setTimeout(resolve, ms)); }

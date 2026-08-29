@@ -35,6 +35,9 @@ test("旧モニターの録音済み音声で注文通知と番号呼出を行�
   assert.match(source,/number_customer\.mp3/);
   await readFile(new URL("../public/audio/legacy/order_received.mp3",import.meta.url));
   await readFile(new URL("../public/audio/legacy/complete_outro.mp3",import.meta.url));
+  assert.match(source,/decodeAudioData/);
+  assert.match(source,/新しい注文が入りました。注文内容を確認してください/);
+  assert.match(source,/audioQueue\.current\.catch/);
 });
 
 test("決済完了後の確定計算では対象注文自身を混雑から除外する",async()=>{
