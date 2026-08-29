@@ -69,7 +69,7 @@ button { font: inherit; }
 .display-only .call-number-list,.display-only .call-lane.completed .call-number-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-auto-rows:minmax(92px,auto);align-content:start;gap:clamp(8px,1.2vw,14px);min-height:0;overflow-x:hidden;overflow-y:auto;padding:clamp(10px,1.5vw,18px);background:#fff}
 .display-only .call-lane.completed .call-number-list{grid-template-columns:repeat(2,minmax(0,1fr));background:#fff8f4}
 .display-only .call-lane.empty .call-number-list{display:flex;align-items:center;justify-content:center}
-.display-only .call-number-list>div{display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:0;min-height:92px;height:auto;padding:10px clamp(10px,1.3vw,16px);border:2px solid #d5dad6;border-radius:12px;background:#fff;box-shadow:none;text-align:left}
+.display-only .call-number-list>div{display:flex;align-items:center;justify-content:center;gap:8px;min-width:0;min-height:92px;height:auto;padding:10px clamp(10px,1.3vw,16px);border:2px solid #d5dad6;border-radius:12px;background:#fff;box-shadow:none;text-align:center}
 .display-only .call-number-list>div.food{border-left:8px solid #b75b3f;box-shadow:none}
 .display-only .call-number-list>div.drink{border-left:8px solid #416f9c;box-shadow:none}
 .display-only .call-number-list small{flex:0 1 78px;width:auto;color:#253c31;font-size:clamp(10px,1.15vw,15px);line-height:1.2;letter-spacing:.02em;white-space:normal}

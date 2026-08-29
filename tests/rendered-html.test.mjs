@@ -52,6 +52,15 @@ test("呼出専用画面は管理画面と同じ2列カードで番号を重ね�
   assert.match(css,/overflow-y:auto/);
 });
 
+test("呼出モニターは部門名を画面表示せず番号を中央表示する",async()=>{
+  const source=await readFile(new URL("../app/kitchen-board.tsx",import.meta.url),"utf8");
+  const css=await readFile(new URL("../app/globals.css",import.meta.url),"utf8");
+  assert.doesNotMatch(source,/>F・フード</);
+  assert.doesNotMatch(source,/>D・ドリンク</);
+  assert.match(source,/aria-label=\{`\$\{item\.department/);
+  assert.match(css,/\.display-only \.call-number-list>div\{[^}]*justify-content:center/);
+});
+
 test("決済完了後の確定計算では対象注文自身を混雑から除外する",async()=>{
   const route=await readFile(new URL("../app/api/v1/schedule/orders/[orderId]/route.ts",import.meta.url),"utf8");
   const store=await readFile(new URL("../lib/schedule-store.ts",import.meta.url),"utf8");
