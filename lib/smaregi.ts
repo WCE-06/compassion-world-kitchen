@@ -7,6 +7,28 @@ type SmaregiRuntime = {
   SMAREGI_ENV?: "sandbox" | "production";
 };
 
+export type SmaregiTransactionDetail = {
+  transactionDetailId: string;
+  transactionDetailDivision: string;
+  productId?: string;
+  productCode: string;
+  productName: string;
+  salesPrice?: string;
+  quantity: string;
+  memo?: string;
+};
+
+export type SmaregiTransaction = {
+  transactionHeadId: string;
+  transactionDateTime: string;
+  updDateTime: string;
+  transactionHeadDivision: string;
+  cancelDivision: string;
+  terminalId?: string;
+  total?: string;
+  details?: SmaregiTransactionDetail[];
+};
+
 export type SmaregiProduct = {
   productId: string;
   categoryId: string;
@@ -34,7 +56,7 @@ export type SmaregiProductInput = {
   soldOut?: boolean;
 };
 
-let cachedToken: { value: string; expiresAt: number } | null = null;
+const cachedTokens = new Map<string, { value: string; expiresAt: number }>();
 
 function config() {
   const runtime = env as unknown as SmaregiRuntime;
@@ -53,10 +75,11 @@ function config() {
   } as const;
 }
 
-async function accessToken() {
+async function accessToken(scope = "pos.products:read pos.products:write") {
+  const cachedToken = cachedTokens.get(scope);
   if (cachedToken && cachedToken.expiresAt > Date.now() + 60_000) return cachedToken.value;
   const current = config();
-  const body = new URLSearchParams({ grant_type: "client_credentials", scope: "pos.products:read pos.products:write" });
+  const body = new URLSearchParams({ grant_type: "client_credentials", scope });
   const response = await fetch(`${current.identityBase}/app/${current.contractId}/token`, {
     method: "POST",
     headers: {
@@ -68,15 +91,15 @@ async function accessToken() {
   if (!response.ok) throw new Error(`SMAREGI_TOKEN_ERROR:${response.status}`);
   const result = await response.json() as { access_token?: string; expires_in?: number };
   if (!result.access_token) throw new Error("SMAREGI_TOKEN_INVALID");
-  cachedToken = { value: result.access_token, expiresAt: Date.now() + Number(result.expires_in ?? 3600) * 1000 };
+  cachedTokens.set(scope, { value: result.access_token, expiresAt: Date.now() + Number(result.expires_in ?? 3600) * 1000 });
   return result.access_token;
 }
 
-async function smaregiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+async function smaregiFetch<T>(path: string, init?: RequestInit, scope?: string): Promise<T> {
   const current = config();
   const response = await fetch(`${current.apiBase}/${current.contractId}/pos${path}`, {
     ...init,
-    headers: { Authorization: `Bearer ${await accessToken()}`, "Content-Type": "application/json", ...init?.headers },
+    headers: { Authorization: `Bearer ${await accessToken(scope)}`, "Content-Type": "application/json", ...init?.headers },
   });
   if (!response.ok) {
     const detail = await response.text().catch(() => "");
@@ -84,6 +107,18 @@ async function smaregiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   }
   if (response.status === 204) return undefined as T;
   return response.json() as Promise<T>;
+}
+
+export function getSmaregiTransactions(updatedFrom: Date, updatedTo: Date) {
+  const query = new URLSearchParams({
+    limit: "100",
+    sort: "updDateTime:asc",
+    "upd_date_time-from": updatedFrom.toISOString(),
+    "upd_date_time-to": updatedTo.toISOString(),
+    transaction_head_division: "1",
+    with_details: "summary",
+  });
+  return smaregiFetch<SmaregiTransaction[]>(`/transactions?${query}`, undefined, "pos.transactions:read");
 }
 
 export async function getSmaregiCatalog() {

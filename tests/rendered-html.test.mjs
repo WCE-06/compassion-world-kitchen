@@ -61,6 +61,17 @@ test("呼出モニターは部門名を画面表示せず番号を中央表示�
   assert.match(css,/\.display-only \.call-number-list>div\{[^}]*justify-content:center/);
 });
 
+test("PAYGATE POSの確定取引を共通注文へ同期する",async()=>{
+  const smaregi=await readFile(new URL("../lib/smaregi.ts",import.meta.url),"utf8");
+  const sync=await readFile(new URL("../lib/paygate-sync.ts",import.meta.url),"utf8");
+  const units=await readFile(new URL("../app/api/v1/kitchen/units/route.ts",import.meta.url),"utf8");
+  assert.match(smaregi,/pos\.transactions:read/);
+  assert.match(smaregi,/with_details: "summary"/);
+  assert.match(sync,/api\/v1\/kitchen\/pos-transactions/);
+  assert.match(sync,/POLL_INTERVAL_MS = 8_000/);
+  assert.match(units,/syncPaygateTransactions/);
+});
+
 test("決済完了後の確定計算では対象注文自身を混雑から除外する",async()=>{
   const route=await readFile(new URL("../app/api/v1/schedule/orders/[orderId]/route.ts",import.meta.url),"utf8");
   const store=await readFile(new URL("../lib/schedule-store.ts",import.meta.url),"utf8");
