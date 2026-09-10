@@ -67,6 +67,7 @@ test("PAYGATE POSの確定取引を共通注文へ同期する",async()=>{
   const units=await readFile(new URL("../app/api/v1/kitchen/units/route.ts",import.meta.url),"utf8");
   assert.match(smaregi,/pos\.transactions:read/);
   assert.match(smaregi,/with_details: "summary"/);
+  assert.match(smaregi,/replace\(\/\\\.\\d\{3\}Z\$\/, "\+00:00"\)/);
   assert.match(sync,/api\/v1\/kitchen\/pos-transactions/);
   assert.match(sync,/POLL_INTERVAL_MS = 8_000/);
   assert.match(sync,/paygate_sync_audits/);
