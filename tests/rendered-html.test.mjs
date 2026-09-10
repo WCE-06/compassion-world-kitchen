@@ -104,6 +104,21 @@ test("工程完了ログから当日の遅延工程を確認できる",async()=>
   assert.match(schema,/idx_kitchen_task_events_created/);
 });
 
+test("同じ工程の実績を集計して調理時間の見直し候補を出す",async()=>{
+  const [view,analytics,styles]=await Promise.all([
+    readFile(new URL("../app/task-analytics.tsx",import.meta.url),"utf8"),
+    readFile(new URL("../app/api/v1/kitchen/task-analytics/route.ts",import.meta.url),"utf8"),
+    readFile(new URL("../app/globals.css",import.meta.url),"utf8"),
+  ]);
+  assert.match(analytics,/bottlenecks/);
+  assert.match(analytics,/suggestedMinutes/);
+  assert.match(analytics,/sampleCount>=3/);
+  assert.match(view,/時間がかかりやすい工程/);
+  assert.match(view,/目安 .*分を検討/);
+  assert.match(view,/自動で調理マスタを書き換えず/);
+  assert.match(styles,/bottleneck-board/);
+});
+
 test("提供予定の接近と超過を警告して最短工程へ反映する",async()=>{
   const [board,styles]=await Promise.all([
     readFile(new URL("../app/kitchen-board.tsx",import.meta.url),"utf8"),
