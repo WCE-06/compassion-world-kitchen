@@ -133,6 +133,22 @@ test("工程完了後に残作業から提供予定を安全側へ再計算す�
   assert.match(units,/estimatedReadyAt: readyAt/);
 });
 
+test("注文カードから理由付き延長と直前予定への復元ができる",async()=>{
+  const [board,adjust,styles]=await Promise.all([
+    readFile(new URL("../app/kitchen-board.tsx",import.meta.url),"utf8"),
+    readFile(new URL("../app/api/v1/kitchen/schedule-adjust/route.ts",import.meta.url),"utf8"),
+    readFile(new URL("../app/globals.css",import.meta.url),"utf8"),
+  ]);
+  assert.match(board,/注文全体の予定変更/);
+  assert.match(board,/＋5分/);
+  assert.match(board,/直前へ戻す/);
+  assert.match(board,/schedule-adjust/);
+  assert.match(adjust,/ADJUSTMENT_REASON_REQUIRED/);
+  assert.match(adjust,/直前の予定変更を取り消し/);
+  assert.match(adjust,/update_mode='MANUAL'/);
+  assert.match(styles,/schedule-dialog-backdrop/);
+});
+
 test("音声担当を1端末に限定し安全に切り替える",async()=>{
   const [board,route]=await Promise.all([
     readFile(new URL("../app/kitchen-board.tsx",import.meta.url),"utf8"),
