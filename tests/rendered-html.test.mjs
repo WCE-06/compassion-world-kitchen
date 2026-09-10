@@ -117,6 +117,22 @@ test("提供予定の接近と超過を警告して最短工程へ反映する",
   assert.match(styles,/order-card\.risk-overdue/);
 });
 
+test("工程完了後に残作業から提供予定を安全側へ再計算する",async()=>{
+  const [board,recalculate,units]=await Promise.all([
+    readFile(new URL("../app/kitchen-board.tsx",import.meta.url),"utf8"),
+    readFile(new URL("../app/api/v1/kitchen/schedule-recalculate/route.ts",import.meta.url),"utf8"),
+    readFile(new URL("../app/api/v1/kitchen/units/route.ts",import.meta.url),"utf8"),
+  ]);
+  assert.match(board,/recalculateAfterProgress/);
+  assert.match(board,/schedule-recalculate/);
+  assert.match(board,/!fryerPreheated\?10:0/);
+  assert.match(recalculate,/Math\.max\(currentFood \?\? 0, candidateReadyAt\)/);
+  assert.match(recalculate,/工程進捗による自動再計算/);
+  assert.match(recalculate,/SCHEDULE_UPDATED/);
+  assert.match(units,/enrichWithKitchenSchedule/);
+  assert.match(units,/estimatedReadyAt: readyAt/);
+});
+
 test("音声担当を1端末に限定し安全に切り替える",async()=>{
   const [board,route]=await Promise.all([
     readFile(new URL("../app/kitchen-board.tsx",import.meta.url),"utf8"),
