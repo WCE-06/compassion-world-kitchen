@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   if (!await hasSiteSessionRequest(request)) return NextResponse.json({ error: "LOGIN_REQUIRED" }, { status: 401 });
-  const body = await request.json().catch(() => null) as { taskId?: string; title?: string; calls?: unknown; completed?: boolean; deviceId?: string } | null;
+  const body = await request.json().catch(() => null) as { taskId?: string; title?: string; calls?: unknown; equipment?:string; expectedMinutes?:number; completed?: boolean; deviceId?: string } | null;
   const taskId = body?.taskId?.trim() ?? "", deviceId = body?.deviceId?.trim() ?? "";
   if (!taskId || taskId.length > 2_000 || !DEVICE_ID.test(deviceId) || typeof body?.completed !== "boolean") {
     return NextResponse.json({ error: "INVALID_TASK_PROGRESS" }, { status: 400 });
@@ -26,11 +26,16 @@ export async function PATCH(request: NextRequest) {
   const title = String(body.title ?? "工程").slice(0, 180);
   const calls = Array.isArray(body.calls) ? body.calls.map(String).slice(0, 100) : [];
   const now = Date.now(), completedAt = body.completed ? now : null, db = await operationsDb();
-  await db.prepare(
+  const result=await db.prepare(
     `INSERT INTO kitchen_task_progress(task_id,title,calls_json,completed,completed_at,updated_at,updated_by_device)
      VALUES(?,?,?,?,?,?,?)
-     ON CONFLICT(task_id) DO UPDATE SET title=excluded.title,calls_json=excluded.calls_json,completed=excluded.completed,completed_at=excluded.completed_at,updated_at=excluded.updated_at,updated_by_device=excluded.updated_by_device`,
+     ON CONFLICT(task_id) DO UPDATE SET title=excluded.title,calls_json=excluded.calls_json,completed=excluded.completed,completed_at=excluded.completed_at,updated_at=excluded.updated_at,updated_by_device=excluded.updated_by_device
+     WHERE kitchen_task_progress.completed!=excluded.completed`,
   ).bind(taskId, title, JSON.stringify(calls), body.completed ? 1 : 0, completedAt, now, deviceId).run();
+  if(result.meta.changes){
+    const equipment=String(body.equipment??"その他").slice(0,80),expectedSeconds=Math.max(0,Math.min(6*60*60,Math.round(Number(body.expectedMinutes??0)*60)||0));
+    await db.prepare("INSERT INTO kitchen_task_events(id,task_id,title,calls_json,equipment,expected_seconds,action,created_at,device_id) VALUES(?,?,?,?,?,?,?,?,?)").bind(crypto.randomUUID(),taskId,title,JSON.stringify(calls),equipment,expectedSeconds,body.completed?"COMPLETE":"UNDO",now,deviceId).run();
+  }
   await db.prepare("DELETE FROM kitchen_task_progress WHERE updated_at<?").bind(now - 7 * 24 * 60 * 60_000).run();
   return NextResponse.json({ ok: true, taskId, completed: body.completed, completedAt, updatedAt: now });
 }

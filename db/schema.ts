@@ -32,6 +32,18 @@ export const kitchenAudioMaster = sqliteTable("kitchen_audio_master", {
   updatedAt: integer("updated_at").notNull(),
 });
 
+export const kitchenTaskEvents = sqliteTable("kitchen_task_events", {
+  id: text("id").primaryKey(),
+  taskId: text("task_id").notNull(),
+  title: text("title").notNull(),
+  callsJson: text("calls_json").notNull().default("[]"),
+  equipment: text("equipment").notNull(),
+  expectedSeconds: integer("expected_seconds").notNull().default(0),
+  action: text("action").notNull(),
+  createdAt: integer("created_at").notNull(),
+  deviceId: text("device_id").notNull(),
+}, (table) => [index("idx_kitchen_task_events_created").on(table.createdAt)]);
+
 export const scheduleSchema = [
   `CREATE TABLE IF NOT EXISTS order_schedules (
     order_id TEXT PRIMARY KEY,
@@ -111,4 +123,16 @@ export const scheduleSchema = [
     lease_until INTEGER NOT NULL,
     updated_at INTEGER NOT NULL
   )`,
+  `CREATE TABLE IF NOT EXISTS kitchen_task_events (
+    id TEXT PRIMARY KEY,
+    task_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    calls_json TEXT NOT NULL DEFAULT '[]',
+    equipment TEXT NOT NULL,
+    expected_seconds INTEGER NOT NULL DEFAULT 0,
+    action TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    device_id TEXT NOT NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_kitchen_task_events_created ON kitchen_task_events(created_at)`,
 ] as const;

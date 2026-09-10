@@ -89,6 +89,21 @@ test("最短工程の完了状態を共通DBへ保存して全端末で復元す
   assert.match(schema,/kitchen_task_progress/);
 });
 
+test("工程完了ログから当日の遅延工程を確認できる",async()=>{
+  const [board,progress,analytics,schema]=await Promise.all([
+    readFile(new URL("../app/kitchen-board.tsx",import.meta.url),"utf8"),
+    readFile(new URL("../app/api/v1/kitchen/task-progress/route.ts",import.meta.url),"utf8"),
+    readFile(new URL("../app/api/v1/kitchen/task-analytics/route.ts",import.meta.url),"utf8"),
+    readFile(new URL("../db/schema.ts",import.meta.url),"utf8"),
+  ]);
+  assert.match(board,/工程実績/);
+  assert.match(progress,/kitchen_task_events/);
+  assert.match(progress,/expectedMinutes/);
+  assert.match(analytics,/overrunSeconds/);
+  assert.match(analytics,/startOfTodayJst/);
+  assert.match(schema,/idx_kitchen_task_events_created/);
+});
+
 test("音声担当を1端末に限定し安全に切り替える",async()=>{
   const [board,route]=await Promise.all([
     readFile(new URL("../app/kitchen-board.tsx",import.meta.url),"utf8"),
