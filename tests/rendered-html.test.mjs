@@ -104,6 +104,19 @@ test("工程完了ログから当日の遅延工程を確認できる",async()=>
   assert.match(schema,/idx_kitchen_task_events_created/);
 });
 
+test("提供予定の接近と超過を警告して最短工程へ反映する",async()=>{
+  const [board,styles]=await Promise.all([
+    readFile(new URL("../app/kitchen-board.tsx",import.meta.url),"utf8"),
+    readFile(new URL("../app/globals.css",import.meta.url),"utf8"),
+  ]);
+  assert.match(board,/提供予定アラート/);
+  assert.match(board,/scheduleRisk/);
+  assert.match(board,/priorityCall/);
+  assert.match(board,/最優先/);
+  assert.match(styles,/schedule-alert-board/);
+  assert.match(styles,/order-card\.risk-overdue/);
+});
+
 test("音声担当を1端末に限定し安全に切り替える",async()=>{
   const [board,route]=await Promise.all([
     readFile(new URL("../app/kitchen-board.tsx",import.meta.url),"utf8"),
