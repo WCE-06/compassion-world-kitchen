@@ -149,6 +149,22 @@ test("注文カードから理由付き延長と直前予定への復元がで�
   assert.match(styles,/schedule-dialog-backdrop/);
 });
 
+test("注文ごとの提供予定変更履歴を確認できる",async()=>{
+  const [board,adjust,styles]=await Promise.all([
+    readFile(new URL("../app/kitchen-board.tsx",import.meta.url),"utf8"),
+    readFile(new URL("../app/api/v1/kitchen/schedule-adjust/route.ts",import.meta.url),"utf8"),
+    readFile(new URL("../app/globals.css",import.meta.url),"utf8"),
+  ]);
+  assert.match(board,/変更履歴/);
+  assert.match(board,/action:\"HISTORY\"/);
+  assert.match(board,/当初予定/);
+  assert.match(board,/現在予定/);
+  assert.match(adjust,/export async function GET/);
+  assert.match(adjust,/ORDER BY calculated_at DESC LIMIT 30/);
+  assert.match(adjust,/Cache-Control/);
+  assert.match(styles,/schedule-history-list/);
+});
+
 test("音声担当を1端末に限定し安全に切り替える",async()=>{
   const [board,route]=await Promise.all([
     readFile(new URL("../app/kitchen-board.tsx",import.meta.url),"utf8"),

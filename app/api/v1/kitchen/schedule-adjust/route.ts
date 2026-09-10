@@ -6,7 +6,18 @@ import { drinkWorkMinutes, scheduleDb } from "@/lib/schedule-store";
 type Body = { action?: "ADJUST" | "UNDO"; orderId?: string; minutes?: number; reason?: string; foodReadyAt?: number | null; drinkReadyAt?: number | null; foodCallNumber?: number | null; drinkCallNumber?: number | null };
 type Row = { requestId:string; originalFoodReadyAt:number|null; foodReadyAt:number|null; originalDrinkReadyAt:number|null; drinkReadyAt:number|null; servingMode:string; createdAt:number };
 type History = { foodReadyAt:number|null; drinkStartAt:number|null; drinkReadyAt:number|null };
+type HistoryRow = History & { calculatedAt:number; reason:string|null; mode:string|null; calculationVersion:string|null };
 const ORDER_ID=/^[A-Za-z0-9_-]{3,100}$/;
+
+export async function GET(request:NextRequest){
+  if(!await hasSiteSessionRequest(request))return NextResponse.json({error:"LOGIN_REQUIRED"},{status:401});
+  const orderId=String(request.nextUrl.searchParams.get("orderId")??"").trim();
+  if(!ORDER_ID.test(orderId))return NextResponse.json({error:"INVALID_ORDER_ID"},{status:400});
+  const db=await scheduleDb(),current=await db.prepare("SELECT original_food_ready_at AS originalFoodReadyAt,food_ready_at AS foodReadyAt,original_drink_ready_at AS originalDrinkReadyAt,drink_ready_at AS drinkReadyAt,update_reason AS reason,update_mode AS mode,updated_at AS updatedAt FROM order_schedules WHERE order_id=?").bind(orderId).first<{originalFoodReadyAt:number|null;foodReadyAt:number|null;originalDrinkReadyAt:number|null;drinkReadyAt:number|null;reason:string|null;mode:string|null;updatedAt:number}>();
+  if(!current)return NextResponse.json({error:"SCHEDULE_NOT_FOUND"},{status:404});
+  const history=await db.prepare("SELECT calculated_at AS calculatedAt,food_ready_at AS foodReadyAt,drink_start_at AS drinkStartAt,drink_ready_at AS drinkReadyAt,update_reason AS reason,update_mode AS mode,calculation_version AS calculationVersion FROM schedule_history WHERE order_id=? ORDER BY calculated_at DESC LIMIT 30").bind(orderId).all<HistoryRow>();
+  return NextResponse.json({orderId,original:{foodReadyAt:current.originalFoodReadyAt,drinkReadyAt:current.originalDrinkReadyAt},current:{foodReadyAt:current.foodReadyAt,drinkReadyAt:current.drinkReadyAt,reason:current.reason,mode:current.mode,updatedAt:current.updatedAt},history:history.results},{headers:{"Cache-Control":"no-store"}});
+}
 
 export async function POST(request:NextRequest){
   if(!await hasSiteSessionRequest(request))return NextResponse.json({error:"LOGIN_REQUIRED"},{status:401});
