@@ -1,3 +1,37 @@
+import { index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+
+export const kitchenTaskProgress = sqliteTable("kitchen_task_progress", {
+  taskId: text("task_id").primaryKey(),
+  title: text("title").notNull(),
+  callsJson: text("calls_json").notNull().default("[]"),
+  completed: integer("completed", { mode: "boolean" }).notNull().default(false),
+  completedAt: integer("completed_at"),
+  updatedAt: integer("updated_at").notNull(),
+  updatedByDevice: text("updated_by_device").notNull(),
+}, (table) => [index("idx_kitchen_task_progress_completed").on(table.completed, table.completedAt)]);
+
+export const paygateSyncAudits = sqliteTable("paygate_sync_audits", {
+  transactionId: text("transaction_id").primaryKey(),
+  transactionAt: integer("transaction_at").notNull(),
+  terminalId: text("terminal_id"),
+  total: integer("total"),
+  status: text("status").notNull(),
+  orderId: text("order_id"),
+  error: text("error"),
+  attemptCount: integer("attempt_count").notNull().default(0),
+  firstSeenAt: integer("first_seen_at").notNull(),
+  lastAttemptAt: integer("last_attempt_at").notNull(),
+  updatedAt: integer("updated_at").notNull(),
+}, (table) => [index("idx_paygate_sync_audits_status_time").on(table.status, table.updatedAt)]);
+
+export const kitchenAudioMaster = sqliteTable("kitchen_audio_master", {
+  singletonId: integer("singleton_id").primaryKey(),
+  deviceId: text("device_id").notNull(),
+  deviceName: text("device_name").notNull(),
+  leaseUntil: integer("lease_until").notNull(),
+  updatedAt: integer("updated_at").notNull(),
+});
+
 export const scheduleSchema = [
   `CREATE TABLE IF NOT EXISTS order_schedules (
     order_id TEXT PRIMARY KEY,
@@ -44,6 +78,37 @@ export const scheduleSchema = [
   `CREATE TABLE IF NOT EXISTS kitchen_settings (
     setting_key TEXT PRIMARY KEY,
     setting_value TEXT NOT NULL,
+    updated_at INTEGER NOT NULL
+  )`,
+  `CREATE TABLE IF NOT EXISTS kitchen_task_progress (
+    task_id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    calls_json TEXT NOT NULL DEFAULT '[]',
+    completed INTEGER NOT NULL DEFAULT 0,
+    completed_at INTEGER,
+    updated_at INTEGER NOT NULL,
+    updated_by_device TEXT NOT NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_kitchen_task_progress_completed ON kitchen_task_progress(completed, completed_at)`,
+  `CREATE TABLE IF NOT EXISTS paygate_sync_audits (
+    transaction_id TEXT PRIMARY KEY,
+    transaction_at INTEGER NOT NULL,
+    terminal_id TEXT,
+    total INTEGER,
+    status TEXT NOT NULL,
+    order_id TEXT,
+    error TEXT,
+    attempt_count INTEGER NOT NULL DEFAULT 0,
+    first_seen_at INTEGER NOT NULL,
+    last_attempt_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_paygate_sync_audits_status_time ON paygate_sync_audits(status, updated_at)`,
+  `CREATE TABLE IF NOT EXISTS kitchen_audio_master (
+    singleton_id INTEGER PRIMARY KEY CHECK(singleton_id = 1),
+    device_id TEXT NOT NULL,
+    device_name TEXT NOT NULL,
+    lease_until INTEGER NOT NULL,
     updated_at INTEGER NOT NULL
   )`,
 ] as const;

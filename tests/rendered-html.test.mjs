@@ -69,7 +69,47 @@ test("PAYGATE POSの確定取引を共通注文へ同期する",async()=>{
   assert.match(smaregi,/with_details: "summary"/);
   assert.match(sync,/api\/v1\/kitchen\/pos-transactions/);
   assert.match(sync,/POLL_INTERVAL_MS = 8_000/);
+  assert.match(sync,/paygate_sync_audits/);
+  assert.match(sync,/status, result/);
+  assert.match(sync,/runSync\(force\)/);
   assert.match(units,/syncPaygateTransactions/);
+});
+
+test("最短工程の完了状態を共通DBへ保存して全端末で復元する",async()=>{
+  const [board,route,schema]=await Promise.all([
+    readFile(new URL("../app/kitchen-board.tsx",import.meta.url),"utf8"),
+    readFile(new URL("../app/api/v1/kitchen/task-progress/route.ts",import.meta.url),"utf8"),
+    readFile(new URL("../db/schema.ts",import.meta.url),"utf8"),
+  ]);
+  assert.match(board,/api\/v1\/kitchen\/task-progress/);
+  assert.match(board,/工程の完了状況は全端末で共有/);
+  assert.match(route,/hasSiteSessionRequest/);
+  assert.match(route,/ON CONFLICT\(task_id\) DO UPDATE/);
+  assert.match(schema,/kitchen_task_progress/);
+});
+
+test("音声担当を1端末に限定し安全に切り替える",async()=>{
+  const [board,route]=await Promise.all([
+    readFile(new URL("../app/kitchen-board.tsx",import.meta.url),"utf8"),
+    readFile(new URL("../app/api/v1/kitchen/audio-master/route.ts",import.meta.url),"utf8"),
+  ]);
+  assert.match(board,/この端末が音声担当/);
+  assert.match(board,/HEARTBEAT/);
+  assert.match(board,/window\.confirm/);
+  assert.match(route,/LEASE_MS = 35_000/);
+  assert.match(route,/AUDIO_MASTER_IN_USE/);
+  assert.match(route,/kitchen_audio_master\.lease_until<=/);
+});
+
+test("決済済み注文の未反映を表示して手動再取得できる",async()=>{
+  const [board,route]=await Promise.all([
+    readFile(new URL("../app/kitchen-board.tsx",import.meta.url),"utf8"),
+    readFile(new URL("../app/api/v1/kitchen/sync-health/route.ts",import.meta.url),"utf8"),
+  ]);
+  assert.match(board,/決済済み注文の未反映/);
+  assert.match(board,/今すぐ再取得/);
+  assert.match(route,/syncPaygateTransactions\(true\)/);
+  assert.match(route,/status='ERROR'/);
 });
 
 test("決済完了後の確定計算では対象注文自身を混雑から除外する",async()=>{
