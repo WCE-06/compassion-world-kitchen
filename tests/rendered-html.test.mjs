@@ -114,9 +114,31 @@ test("同じ工程の実績を集計して調理時間の見直し候補を出�
   assert.match(analytics,/suggestedMinutes/);
   assert.match(analytics,/directSamples>=3/);
   assert.match(view,/時間がかかりやすい工程/);
-  assert.match(view,/目安 .*分を検討/);
-  assert.match(view,/調理マスタは自動変更しません/);
+  assert.match(view,/見積りへ＋.*分を反映/);
+  assert.match(view,/直接計測3回以上の候補/);
   assert.match(styles,/bottleneck-board/);
+});
+
+test("直接計測3回以上の改善候補を確認後に安全余裕へ反映する",async()=>{
+  const [board,view,analytics,settings,estimate,engine,schema]=await Promise.all([
+    readFile(new URL("../app/kitchen-board.tsx",import.meta.url),"utf8"),
+    readFile(new URL("../app/task-analytics.tsx",import.meta.url),"utf8"),
+    readFile(new URL("../app/api/v1/kitchen/task-analytics/route.ts",import.meta.url),"utf8"),
+    readFile(new URL("../app/api/v1/kitchen/timing-adjustments/route.ts",import.meta.url),"utf8"),
+    readFile(new URL("../app/api/v1/schedule/estimate/route.ts",import.meta.url),"utf8"),
+    readFile(new URL("../lib/schedule-engine.ts",import.meta.url),"utf8"),
+    readFile(new URL("../db/schema.ts",import.meta.url),"utf8"),
+  ]);
+  assert.match(view,/window\.confirm/);
+  assert.match(view,/直接計測3回で反映可能/);
+  assert.match(settings,/sampleCount<3/);
+  assert.match(settings,/ON CONFLICT\(adjustment_key\)/);
+  assert.match(analytics,/suggestedBufferMinutes/);
+  assert.match(estimate,/timingAdjustmentBuffers/);
+  assert.match(engine,/timingBuffers/);
+  assert.match(board,/applyTimingBuffers/);
+  assert.match(board,/実績に基づく安全余裕/);
+  assert.match(schema,/kitchen_timing_adjustments/);
 });
 
 test("いまやる作業の表示から完了までを直接計測する",async()=>{

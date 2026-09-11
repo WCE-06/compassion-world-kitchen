@@ -16,6 +16,15 @@ export const kitchenTaskStarts = sqliteTable("kitchen_task_starts", {
   deviceId: text("device_id").notNull(),
 }, (table) => [index("idx_kitchen_task_starts_started").on(table.startedAt)]);
 
+export const kitchenTimingAdjustments = sqliteTable("kitchen_timing_adjustments", {
+  adjustmentKey: text("adjustment_key").primaryKey(),
+  label: text("label").notNull(),
+  bufferMinutes: integer("buffer_minutes").notNull(),
+  sourceTitle: text("source_title").notNull(),
+  sampleCount: integer("sample_count").notNull(),
+  updatedAt: integer("updated_at").notNull(),
+});
+
 export const paygateSyncAudits = sqliteTable("paygate_sync_audits", {
   transactionId: text("transaction_id").primaryKey(),
   transactionAt: integer("transaction_at").notNull(),
@@ -114,6 +123,14 @@ export const scheduleSchema = [
     device_id TEXT NOT NULL
   )`,
   `CREATE INDEX IF NOT EXISTS idx_kitchen_task_starts_started ON kitchen_task_starts(started_at)`,
+  `CREATE TABLE IF NOT EXISTS kitchen_timing_adjustments (
+    adjustment_key TEXT PRIMARY KEY,
+    label TEXT NOT NULL,
+    buffer_minutes INTEGER NOT NULL,
+    source_title TEXT NOT NULL,
+    sample_count INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  )`,
   `CREATE TABLE IF NOT EXISTS paygate_sync_audits (
     transaction_id TEXT PRIMARY KEY,
     transaction_at INTEGER NOT NULL,

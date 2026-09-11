@@ -57,3 +57,10 @@ test("かき氷は受信区分がDRINKでもフード提供時間として計算
   assert.ok(result.foodReadyAt);
   assert.equal(result.drinkReadyAt,null);
 });
+
+test("採用した安全余裕は該当器具のクリティカルパスへ一度だけ加算する",()=>{
+  const input={requestId:"measured-buffer",orderedAt:"2026-08-26T12:00:00+09:00",items:[{name:"にんにくからあげ丼",department:"FOOD",quantity:1},{name:"フリフリポテト",department:"FOOD",quantity:1}]};
+  const base=calculateSchedule(input,5,0,0,true),adjusted=calculateSchedule(input,5,0,0,true,{FRYER:3});
+  assert.equal((adjusted.foodEstimatedMinutes??0)-(base.foodEstimatedMinutes??0),3);
+  assert.equal(adjusted.inputs.timingBuffers.FRYER,3);
+});

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireScheduleToken } from "@/lib/schedule-auth";
 import { calculateSchedule, CALCULATION_VERSION, iso, type EstimateInput } from "@/lib/schedule-engine";
-import { drinkWorkMinutes, liveKitchenLoad, scheduleDb } from "@/lib/schedule-store";
+import { drinkWorkMinutes, liveKitchenLoad, scheduleDb, timingAdjustmentBuffers } from "@/lib/schedule-store";
 
 type Context = { params: Promise<{ orderId: string }> };
 type UpdateBody = EstimateInput & { reason?: string; mode?: "AUTOMATIC" | "MANUAL"; foodReadyAt?: string; drinkReadyAt?: string; foodCallNumber?: number; drinkCallNumber?: number };
@@ -21,7 +21,7 @@ export async function PUT(request: NextRequest, context: Context) {
   const body = await request.json().catch(() => null) as UpdateBody | null;
   if (!body?.requestId || !Array.isArray(body.items) || !body.items.length) return NextResponse.json({ error: "INVALID_REQUEST" }, { status: 400 });
   // 決済直後は対象注文が既にACCEPTEDになっているため、自身を混雑・器具占有へ二重加算しない。
-  const load=await liveKitchenLoad(orderId),mode = body.mode ?? "AUTOMATIC", now = Date.now(), calculated = calculateSchedule(body, await drinkWorkMinutes(),load.activeFoodOrders,load.activeMicrowaveSeconds,load.fryerPreheated);
+  const [load,buffers]=await Promise.all([liveKitchenLoad(orderId),timingAdjustmentBuffers()]),mode = body.mode ?? "AUTOMATIC", now = Date.now(), calculated = calculateSchedule(body, await drinkWorkMinutes(),load.activeFoodOrders,load.activeMicrowaveSeconds,load.fryerPreheated,buffers);
   const manualFood = mode === "MANUAL" && body.foodReadyAt ? Date.parse(body.foodReadyAt) : null, manualDrink = mode === "MANUAL" && body.drinkReadyAt ? Date.parse(body.drinkReadyAt) : null;
   const foodReadyAt = Number.isFinite(manualFood) ? manualFood : calculated.foodReadyAt;
   const drinkReadyAt = Number.isFinite(manualDrink) ? manualDrink : calculated.drinkReadyAt;

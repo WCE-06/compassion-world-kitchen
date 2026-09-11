@@ -13,6 +13,7 @@ export async function scheduleDb() {
   return db;
 }
 export async function drinkWorkMinutes() { const row = await (await scheduleDb()).prepare("SELECT setting_value AS value FROM kitchen_settings WHERE setting_key='drink_work_minutes'").first<{ value: string }>(); return Math.max(1, Number(row?.value ?? 5)); }
+export async function timingAdjustmentBuffers(){const rows=await(await scheduleDb()).prepare("SELECT adjustment_key AS adjustmentKey,buffer_minutes AS bufferMinutes FROM kitchen_timing_adjustments").all<{adjustmentKey:"FRYER"|"MICROWAVE"|"PREP"|"DRINK";bufferMinutes:number}>();return Object.fromEntries(rows.results.map(row=>[row.adjustmentKey,Math.max(0,Math.min(30,row.bufferMinutes))])) as Partial<Record<"FRYER"|"MICROWAVE"|"PREP"|"DRINK",number>>}
 export async function fryerPreheated() { const row = await (await scheduleDb()).prepare("SELECT setting_value AS value FROM kitchen_settings WHERE setting_key='fryer_preheated'").first<{ value: string }>(); return row?.value === "true"; }
 export async function setFryerPreheated(value:boolean) { await (await scheduleDb()).prepare("INSERT INTO kitchen_settings(setting_key,setting_value,updated_at) VALUES('fryer_preheated',?,?) ON CONFLICT(setting_key) DO UPDATE SET setting_value=excluded.setting_value,updated_at=excluded.updated_at").bind(String(value),Date.now()).run(); return value; }
 export async function liveFoodOrderCount() {
