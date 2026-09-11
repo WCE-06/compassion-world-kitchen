@@ -10,6 +10,12 @@ export const kitchenTaskProgress = sqliteTable("kitchen_task_progress", {
   updatedByDevice: text("updated_by_device").notNull(),
 }, (table) => [index("idx_kitchen_task_progress_completed").on(table.completed, table.completedAt)]);
 
+export const kitchenTaskStarts = sqliteTable("kitchen_task_starts", {
+  taskId: text("task_id").primaryKey(),
+  startedAt: integer("started_at").notNull(),
+  deviceId: text("device_id").notNull(),
+}, (table) => [index("idx_kitchen_task_starts_started").on(table.startedAt)]);
+
 export const paygateSyncAudits = sqliteTable("paygate_sync_audits", {
   transactionId: text("transaction_id").primaryKey(),
   transactionAt: integer("transaction_at").notNull(),
@@ -102,6 +108,12 @@ export const scheduleSchema = [
     updated_by_device TEXT NOT NULL
   )`,
   `CREATE INDEX IF NOT EXISTS idx_kitchen_task_progress_completed ON kitchen_task_progress(completed, completed_at)`,
+  `CREATE TABLE IF NOT EXISTS kitchen_task_starts (
+    task_id TEXT PRIMARY KEY,
+    started_at INTEGER NOT NULL,
+    device_id TEXT NOT NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_kitchen_task_starts_started ON kitchen_task_starts(started_at)`,
   `CREATE TABLE IF NOT EXISTS paygate_sync_audits (
     transaction_id TEXT PRIMARY KEY,
     transaction_at INTEGER NOT NULL,

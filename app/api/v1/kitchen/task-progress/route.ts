@@ -16,6 +16,18 @@ export async function GET(request: NextRequest) {
   }, { headers: { "Cache-Control": "no-store" } });
 }
 
+export async function POST(request: NextRequest) {
+  if (!await hasSiteSessionRequest(request)) return NextResponse.json({ error: "LOGIN_REQUIRED" }, { status: 401 });
+  const body = await request.json().catch(() => null) as { taskId?:string; deviceId?:string } | null;
+  const taskId=body?.taskId?.trim()??"",deviceId=body?.deviceId?.trim()??"";
+  if(!taskId||taskId.length>2_000||!DEVICE_ID.test(deviceId))return NextResponse.json({error:"INVALID_TASK_START"},{status:400});
+  const now=Date.now(),db=await operationsDb();
+  await db.prepare("INSERT OR IGNORE INTO kitchen_task_starts(task_id,started_at,device_id) VALUES(?,?,?)").bind(taskId,now,deviceId).run();
+  const start=await db.prepare("SELECT started_at AS startedAt FROM kitchen_task_starts WHERE task_id=?").bind(taskId).first<{startedAt:number}>();
+  await db.prepare("DELETE FROM kitchen_task_starts WHERE started_at<?").bind(now-7*24*60*60_000).run();
+  return NextResponse.json({ok:true,taskId,startedAt:start?.startedAt??now},{headers:{"Cache-Control":"no-store"}});
+}
+
 export async function PATCH(request: NextRequest) {
   if (!await hasSiteSessionRequest(request)) return NextResponse.json({ error: "LOGIN_REQUIRED" }, { status: 401 });
   const body = await request.json().catch(() => null) as { taskId?: string; title?: string; calls?: unknown; equipment?:string; expectedMinutes?:number; completed?: boolean; deviceId?: string } | null;
@@ -35,6 +47,7 @@ export async function PATCH(request: NextRequest) {
   if(result.meta.changes){
     const equipment=String(body.equipment??"その他").slice(0,80),expectedSeconds=Math.max(0,Math.min(6*60*60,Math.round(Number(body.expectedMinutes??0)*60)||0));
     await db.prepare("INSERT INTO kitchen_task_events(id,task_id,title,calls_json,equipment,expected_seconds,action,created_at,device_id) VALUES(?,?,?,?,?,?,?,?,?)").bind(crypto.randomUUID(),taskId,title,JSON.stringify(calls),equipment,expectedSeconds,body.completed?"COMPLETE":"UNDO",now,deviceId).run();
+    if(!body.completed)await db.prepare("DELETE FROM kitchen_task_starts WHERE task_id=?").bind(taskId).run();
   }
   await db.prepare("DELETE FROM kitchen_task_progress WHERE updated_at<?").bind(now - 7 * 24 * 60 * 60_000).run();
   return NextResponse.json({ ok: true, taskId, completed: body.completed, completedAt, updatedAt: now });

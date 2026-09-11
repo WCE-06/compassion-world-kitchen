@@ -83,7 +83,7 @@ test("最短工程の完了状態を共通DBへ保存して全端末で復元す
     readFile(new URL("../db/schema.ts",import.meta.url),"utf8"),
   ]);
   assert.match(board,/api\/v1\/kitchen\/task-progress/);
-  assert.match(board,/工程の完了状況は全端末で共有/);
+  assert.match(board,/工程の完了状況と実作業時間は全端末で共有/);
   assert.match(route,/hasSiteSessionRequest/);
   assert.match(route,/ON CONFLICT\(task_id\) DO UPDATE/);
   assert.match(schema,/kitchen_task_progress/);
@@ -112,11 +112,27 @@ test("同じ工程の実績を集計して調理時間の見直し候補を出�
   ]);
   assert.match(analytics,/bottlenecks/);
   assert.match(analytics,/suggestedMinutes/);
-  assert.match(analytics,/sampleCount>=3/);
+  assert.match(analytics,/directSamples>=3/);
   assert.match(view,/時間がかかりやすい工程/);
   assert.match(view,/目安 .*分を検討/);
-  assert.match(view,/自動で調理マスタを書き換えず/);
+  assert.match(view,/調理マスタは自動変更しません/);
   assert.match(styles,/bottleneck-board/);
+});
+
+test("いまやる作業の表示から完了までを直接計測する",async()=>{
+  const [board,progress,analytics,schema]=await Promise.all([
+    readFile(new URL("../app/kitchen-board.tsx",import.meta.url),"utf8"),
+    readFile(new URL("../app/api/v1/kitchen/task-progress/route.ts",import.meta.url),"utf8"),
+    readFile(new URL("../app/api/v1/kitchen/task-analytics/route.ts",import.meta.url),"utf8"),
+    readFile(new URL("../db/schema.ts",import.meta.url),"utf8"),
+  ]);
+  assert.match(board,/method:\"POST\"/);
+  assert.match(board,/時間計測中/);
+  assert.match(progress,/INSERT OR IGNORE INTO kitchen_task_starts/);
+  assert.match(progress,/DELETE FROM kitchen_task_starts WHERE task_id=/);
+  assert.match(analytics,/durationSeconds/);
+  assert.match(analytics,/measurementSource/);
+  assert.match(schema,/idx_kitchen_task_starts_started/);
 });
 
 test("提供予定の接近と超過を警告して最短工程へ反映する",async()=>{
