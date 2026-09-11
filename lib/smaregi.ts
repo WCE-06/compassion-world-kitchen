@@ -109,10 +109,11 @@ async function smaregiFetch<T>(path: string, init?: RequestInit, scope?: string)
   return response.json() as Promise<T>;
 }
 
-export function getSmaregiTransactions(updatedFrom: Date, updatedTo: Date) {
+export function getSmaregiTransactions(updatedFrom: Date, updatedTo: Date, page = 1) {
   const smaregiDateTime = (date: Date) => date.toISOString().replace(/\.\d{3}Z$/, "+00:00");
   const query = new URLSearchParams({
     limit: "100",
+    page: String(Math.max(1, Math.floor(page))),
     sort: "updDateTime:asc",
     "upd_date_time-from": smaregiDateTime(updatedFrom),
     "upd_date_time-to": smaregiDateTime(updatedTo),

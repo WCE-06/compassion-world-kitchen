@@ -47,6 +47,13 @@ export const kitchenAudioMaster = sqliteTable("kitchen_audio_master", {
   updatedAt: integer("updated_at").notNull(),
 });
 
+export const kitchenAudioEvents = sqliteTable("kitchen_audio_events", {
+  eventKey: text("event_key").primaryKey(),
+  eventType: text("event_type").notNull(),
+  deviceId: text("device_id").notNull(),
+  playedAt: integer("played_at").notNull(),
+}, (table) => [index("idx_kitchen_audio_events_played").on(table.playedAt)]);
+
 export const kitchenTaskEvents = sqliteTable("kitchen_task_events", {
   id: text("id").primaryKey(),
   taskId: text("task_id").notNull(),
@@ -152,6 +159,13 @@ export const scheduleSchema = [
     lease_until INTEGER NOT NULL,
     updated_at INTEGER NOT NULL
   )`,
+  `CREATE TABLE IF NOT EXISTS kitchen_audio_events (
+    event_key TEXT PRIMARY KEY,
+    event_type TEXT NOT NULL,
+    device_id TEXT NOT NULL,
+    played_at INTEGER NOT NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_kitchen_audio_events_played ON kitchen_audio_events(played_at)`,
   `CREATE TABLE IF NOT EXISTS kitchen_task_events (
     id TEXT PRIMARY KEY,
     task_id TEXT NOT NULL,

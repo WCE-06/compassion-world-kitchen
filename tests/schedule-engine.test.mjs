@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { calculateSchedule, microwaveSeconds, SHARED_CARBONARA_SAUCE_600W_SECONDS, FRYER_PREHEAT_MINUTES } from "../lib/schedule-engine.ts";
+import { calculateSchedule, microwaveSeconds, SHARED_CARBONARA_SAUCE_600W_SECONDS, FRYER_PREHEAT_MINUTES, SERVICE_SAFETY_MINUTES } from "../lib/schedule-engine.ts";
 
 const combo={requestId:"carbonara-tsukemen",orderedAt:"2026-08-26T12:00:00+09:00",items:[
   {name:"カルボナーラパスタ",department:"FOOD",quantity:1,preparationMinutes:9},
@@ -49,7 +49,7 @@ test("フライヤー予熱はレンジ商品へ一律加算せず並行計算�
 
 test("揚げ物の標準を200℃4分・仕上げ込み6分として計算する",()=>{
   const result=calculateSchedule({requestId:"fried-200c",orderedAt:"2026-08-26T12:00:00+09:00",items:[{name:"にんにくからあげ丼",department:"FOOD",quantity:1}]},5,0,0,true);
-  assert.equal(result.foodEstimatedMinutes,6);
+  assert.equal(result.foodEstimatedMinutes,6+SERVICE_SAFETY_MINUTES);
 });
 
 test("かき氷は受信区分がDRINKでもフード提供時間として計算する",()=>{
@@ -63,4 +63,11 @@ test("採用した安全余裕は該当器具のクリティカルパスへ一�
   const base=calculateSchedule(input,5,0,0,true),adjusted=calculateSchedule(input,5,0,0,true,{FRYER:3});
   assert.equal((adjusted.foodEstimatedMinutes??0)-(base.foodEstimatedMinutes??0),3);
   assert.equal(adjusted.inputs.timingBuffers.FRYER,3);
+});
+
+test("顧客向け提供予定には受渡確認の安全余裕を一度だけ加算する",()=>{
+  const result=calculateSchedule({requestId:"service-safety",orderedAt:"2026-08-26T12:00:00+09:00",items:[{name:"普通ライス",department:"FOOD",quantity:1}]});
+  assert.equal(SERVICE_SAFETY_MINUTES,3);
+  assert.equal(result.inputs.serviceSafetyMinutes,3);
+  assert.equal(result.foodEstimatedMinutes,7);
 });

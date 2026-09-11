@@ -3,9 +3,10 @@ export type EstimateItem = { productId?: string; productCode?: string; name?: st
 export type EstimateInput = { requestId: string; orderId?: string; items: EstimateItem[]; orderedAt?: string; servingMode?: ServingMode; serviceType?: "EAT_IN" | "TAKEOUT"; kitchen?: { activeFoodOrders?: number; fryerBatches?: number; fryerPreheated?:boolean; microwaveContainers?: number; activeMicrowaveSeconds?:number } };
 export type TimingAdjustmentBuffers = Partial<Record<"FRYER"|"MICROWAVE"|"PREP"|"DRINK",number>>;
 
-export const CALCULATION_VERSION = "aok-v1.3-fryer-200c-4m";
+export const CALCULATION_VERSION = "aok-v1.4-operational-safety";
 export const SHARED_CARBONARA_SAUCE_600W_SECONDS=50;
 export const FRYER_PREHEAT_MINUTES=10;
+export const SERVICE_SAFETY_MINUTES=3;
 
 function usesFryer(item:EstimateItem){return /唐揚げ|からあげ|フライドチキン|チーズドッグ|たこ焼|ポテト|磯辺|karaage|fried|cheese.*dog|takoyaki|poteto/i.test(`${item.productCode??""} ${item.name??""}`)}
 
@@ -46,7 +47,7 @@ export function calculateSchedule(input: EstimateInput, drinkWorkMinutes = 5, li
   const requestedMicrowaveSeconds=foods.reduce((sum,item)=>sum+microwaveSeconds(item),0),activeMicrowaveSeconds=Math.max(0,input.kitchen?.activeMicrowaveSeconds??liveMicrowaveSeconds),microwaveSerialMinutes=Math.ceil((requestedMicrowaveSeconds+activeMicrowaveSeconds)/60),assemblyMinutes=requestedMicrowaveSeconds>0?2:0;
   const equipmentPenalty = Math.max(0, input.kitchen?.fryerBatches ?? 0) * 2 + Math.max(0, (input.kitchen?.microwaveContainers ?? 0) - 1) * 2;
   const criticalPath=Math.max(fryerPathMinutes,nonFryerPathMinutes,microwaveSerialMinutes+assemblyMinutes+microwaveBuffer);
-  const foodEstimatedMinutes = foods.length ? criticalPath + parallelPenalty + queuePenalty + equipmentPenalty : null;
+  const foodEstimatedMinutes = foods.length ? criticalPath + parallelPenalty + queuePenalty + equipmentPenalty + SERVICE_SAFETY_MINUTES : null;
   const foodReadyAt = foodEstimatedMinutes == null ? null : orderedAt + foodEstimatedMinutes * 60_000;
   const servingMode: ServingMode = input.servingMode ?? (foods.length && drinks.length ? "WITH_FOOD" : "AS_SOON_AS_POSSIBLE");
   let drinkStartAt: number | null = null, drinkReadyAt: number | null = null;
@@ -56,7 +57,7 @@ export function calculateSchedule(input: EstimateInput, drinkWorkMinutes = 5, li
     if (servingMode === "WITH_FOOD" && foodReadyAt) { drinkStartAt = Math.max(orderedAt, foodReadyAt - drinkWorkMinutes * 60_000); drinkReadyAt = foodReadyAt; }
     else { drinkStartAt = orderedAt; drinkReadyAt = independentReadyAt; }
   }
-  return { calculatedAt, foodEstimatedMinutes, foodReadyAt, drinkWorkMinutes, drinkStartAt, drinkReadyAt, servingMode, inputs: { liveFoodOrders: queue, itemCount, longestItemMinutes: longest, parallelPenalty, queuePenalty, equipmentPenalty,requestedMicrowaveSeconds,activeMicrowaveSeconds,microwaveSerialMinutes,assemblyMinutes,microwaveCount:1,fryerPreheated,fryerPreheatMinutes,fryerPathMinutes,timingBuffers:{FRYER:fryerBuffer,MICROWAVE:microwaveBuffer,PREP:prepBuffer,DRINK:Math.max(0,timingBuffers.DRINK??0)} } };
+  return { calculatedAt, foodEstimatedMinutes, foodReadyAt, drinkWorkMinutes, drinkStartAt, drinkReadyAt, servingMode, inputs: { liveFoodOrders: queue, itemCount, longestItemMinutes: longest, parallelPenalty, queuePenalty, equipmentPenalty,serviceSafetyMinutes:foods.length?SERVICE_SAFETY_MINUTES:0,requestedMicrowaveSeconds,activeMicrowaveSeconds,microwaveSerialMinutes,assemblyMinutes,microwaveCount:1,fryerPreheated,fryerPreheatMinutes,fryerPathMinutes,timingBuffers:{FRYER:fryerBuffer,MICROWAVE:microwaveBuffer,PREP:prepBuffer,DRINK:Math.max(0,timingBuffers.DRINK??0)} } };
 }
 
 export function iso(value: number | null) { return value == null ? null : new Date(value).toISOString(); }

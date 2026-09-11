@@ -7,10 +7,11 @@ type SyncResult = { status: "SYNCED" | "SKIPPED" | "UNAVAILABLE"; checked: numbe
 type ImportResult = { imported?: boolean; ignored?: boolean; idempotentReplay?: boolean; cancelled?: boolean; orderId?: string; error?: string };
 
 const POLL_INTERVAL_MS = 8_000;
-const INITIAL_LOOKBACK_MS = 30 * 60_000;
+const INITIAL_LOOKBACK_MS = 24 * 60 * 60_000;
 const OVERLAP_MS = 2 * 60_000;
+const PAGE_SIZE = 100;
+const MAX_PAGES = 20;
 let lastAttemptAt = 0;
-let lastCursorAt = 0;
 let inFlight: Promise<SyncResult> | null = null;
 
 function membersTarget() {
@@ -40,6 +41,8 @@ async function setting(key: string, value: string | null) {
   else await db.prepare("INSERT INTO kitchen_settings(setting_key,setting_value,updated_at) VALUES(?,?,?) ON CONFLICT(setting_key) DO UPDATE SET setting_value=excluded.setting_value,updated_at=excluded.updated_at").bind(key, value, now).run();
 }
 
+async function readSetting(key:string){return(await operationsDb()).prepare("SELECT setting_value AS value FROM kitchen_settings WHERE setting_key=?").bind(key).first<{value:string}>()}
+
 async function audit(transaction: SmaregiTransaction, status: string, result?: ImportResult, error?: unknown) {
   const now = Date.now(), transactionAt = Date.parse(transaction.transactionDateTime) || now;
   const message = error instanceof Error ? error.message.slice(0, 300) : error ? String(error).slice(0, 300) : null;
@@ -54,10 +57,12 @@ async function runSync(force = false): Promise<SyncResult> {
   const now = Date.now(), target = membersTarget();
   if (!target.production || !target.token) return { status: "SKIPPED", checked: 0, imported: 0 };
   await setting("paygate_sync_last_attempt_at", String(now));
-  const from = new Date(force ? now - INITIAL_LOOKBACK_MS : Math.max(lastCursorAt ? lastCursorAt - OVERLAP_MS : now - INITIAL_LOOKBACK_MS, now - INITIAL_LOOKBACK_MS));
+  const savedCursor=Number((await readSetting("paygate_sync_cursor_at"))?.value??0),cursor=Number.isFinite(savedCursor)?savedCursor:0;
+  const from = new Date(force ? now - INITIAL_LOOKBACK_MS : Math.max(cursor ? cursor - OVERLAP_MS : now - INITIAL_LOOKBACK_MS, now - INITIAL_LOOKBACK_MS));
   const to = new Date(now + 1_000);
   try {
-    const transactions = await getSmaregiTransactions(from, to);
+    const transactions:SmaregiTransaction[]=[];
+    for(let page=1;page<=MAX_PAGES;page+=1){const rows=await getSmaregiTransactions(from,to,page);transactions.push(...rows);if(rows.length<PAGE_SIZE)break}
     let imported = 0, failed = 0;
     for (const transaction of transactions) {
       try {
@@ -71,12 +76,12 @@ async function runSync(force = false): Promise<SyncResult> {
       }
     }
     const newest = transactions.reduce((latest, transaction) => Math.max(latest, Date.parse(transaction.updDateTime || transaction.transactionDateTime) || 0), 0);
-    lastCursorAt = Math.max(lastCursorAt, newest, now);
     if (failed) {
       const message = `${failed}件の取引を注文へ反映できませんでした`;
       await setting("paygate_sync_last_error", message);
       return { status: "UNAVAILABLE", checked: transactions.length, imported, failed, message };
     }
+    await setting("paygate_sync_cursor_at",String(Math.max(cursor,newest,now)));
     await setting("paygate_sync_last_success_at", String(Date.now()));
     await setting("paygate_sync_last_error", null);
     return { status: "SYNCED", checked: transactions.length, imported, failed: 0 };

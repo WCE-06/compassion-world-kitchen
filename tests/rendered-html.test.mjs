@@ -219,9 +219,11 @@ test("注文ごとの提供予定変更履歴を確認できる",async()=>{
 });
 
 test("音声担当を1端末に限定し安全に切り替える",async()=>{
-  const [board,route]=await Promise.all([
+  const [board,route,eventRoute,schema]=await Promise.all([
     readFile(new URL("../app/kitchen-board.tsx",import.meta.url),"utf8"),
     readFile(new URL("../app/api/v1/kitchen/audio-master/route.ts",import.meta.url),"utf8"),
+    readFile(new URL("../app/api/v1/kitchen/audio-events/route.ts",import.meta.url),"utf8"),
+    readFile(new URL("../db/schema.ts",import.meta.url),"utf8"),
   ]);
   assert.match(board,/この端末が音声担当/);
   assert.match(board,/HEARTBEAT/);
@@ -229,6 +231,30 @@ test("音声担当を1端末に限定し安全に切り替える",async()=>{
   assert.match(route,/LEASE_MS = 35_000/);
   assert.match(route,/AUDIO_MASTER_IN_USE/);
   assert.match(route,/kitchen_audio_master\.lease_until<=/);
+  assert.match(board,/sessionStorage\.getItem\("aozora-kitchen-audio-device-id"\)/);
+  assert.match(board,/claimAudioEvent/);
+  assert.match(eventRoute,/INSERT OR IGNORE INTO kitchen_audio_events/);
+  assert.match(schema,/kitchen_audio_events/);
+});
+
+test("6つの運用保護を注文管理へ組み込む",async()=>{
+  const [board,sync,smaregi,readme]=await Promise.all([
+    readFile(new URL("../app/kitchen-board.tsx",import.meta.url),"utf8"),
+    readFile(new URL("../lib/paygate-sync.ts",import.meta.url),"utf8"),
+    readFile(new URL("../lib/smaregi.ts",import.meta.url),"utf8"),
+    readFile(new URL("../README.md",import.meta.url),"utf8"),
+  ]);
+  assert.match(sync,/INITIAL_LOOKBACK_MS = 24 \* 60 \* 60_000/);
+  assert.match(sync,/paygate_sync_cursor_at/);
+  assert.match(sync,/if \(failed\)/);
+  assert.match(sync,/MAX_PAGES/);
+  assert.match(smaregi,/page: String/);
+  assert.match(board,/task-progress/);
+  assert.match(board,/visibilitychange/);
+  assert.match(board,/window\.addEventListener\("online"/);
+  assert.match(board,/5秒後に反映します/);
+  assert.match(board,/cancelPendingAction/);
+  assert.match(readme,/受渡確認3分/);
 });
 
 test("決済済み注文の未反映を表示して手動再取得できる",async()=>{

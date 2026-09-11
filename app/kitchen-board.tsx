@@ -21,6 +21,7 @@ type ScheduleHistoryEntry = { calculatedAt:number; foodReadyAt:number|null; drin
 type ScheduleHistory = { original:{foodReadyAt:number|null;drinkReadyAt:number|null};current:{foodReadyAt:number|null;drinkReadyAt:number|null;reason:string|null;mode:string|null;updatedAt:number};history:ScheduleHistoryEntry[] };
 type TimingBuffers = Partial<Record<"FRYER"|"MICROWAVE"|"PREP"|"DRINK",number>>;
 type ScheduleDialog = { item:Fulfillment; action:"ADJUST"|"UNDO"|"HISTORY"; minutes?:5|10 };
+type PendingAction = { item:Fulfillment; action:"START"|"STEP"|"CALL"|"PICKUP"; label:string };
 type Screen = "ORDERS" | "CALL_MONITOR" | "HISTORY" | "ANALYTICS" | "ANNOUNCEMENTS" | "HOURS" | "MENU" | "MASTER" | "TEST";
 
 const statusLabel: Record<Status, string> = { ACCEPTED: "未着手", COOKING: "調理中", READY: "完成", CALLED: "呼出中", PICKED_UP: "受渡済み", CANCELLED: "取消" };
@@ -52,6 +53,7 @@ export default function KitchenBoard({ displayOnly = false }: { displayOnly?: bo
   const optimizedTasks=useMemo(()=>{const active=[...data.FOOD,...data.DRINK].filter(item=>item.status==="ACCEPTED"||item.status==="COOKING");return applyTimingBuffers(finalizeKitchenTasks(expandDrinkTasks(optimizeKitchenV2(active),active),active),timingBuffers)},[data,timingBuffers]);
   const [history, setHistory] = useState<Fulfillment[]>([]);
   const [loading, setLoading] = useState(true), [message, setMessage] = useState(""), [updating, setUpdating] = useState<string | null>(null);
+  const [pendingAction,setPendingAction]=useState<PendingAction|null>(null),pendingActionTimer=useRef<number|null>(null);
   const [optimizerDone,setOptimizerDone]=useState<Set<string>>(()=>new Set());
   const [optimizerFocus,setOptimizerFocus]=useState("");
   const [optimizerHistory,setOptimizerHistory]=useState<string[]>([]);
@@ -139,6 +141,7 @@ export default function KitchenBoard({ displayOnly = false }: { displayOnly?: bo
       setAudioStatus(`音声・BGM 稼働中・${volumeLabel()}`);
     } catch { audioEnabledRef.current = true; setAudioEnabled(true); await speak("呼び出し音声を開始しました。"); setAudioStatus(`呼出音声は稼働中・${volumeLabel()}`); }
     flushPendingNewOrders();
+    announceOutstandingOrders();
   }
 
   async function enableAudio(force=false) {
@@ -177,10 +180,14 @@ export default function KitchenBoard({ displayOnly = false }: { displayOnly?: bo
     } catch { setTestingFull(false); setAudioStatus("100%テストを開始できませんでした"); }
   }
 
-  function announce(item: Fulfillment) {
+  async function claimAudioEvent(eventKey:string,eventType:string){if(!deviceIdRef.current)return false;try{const response=await fetch("/api/v1/kitchen/audio-events",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({eventKey,eventType,deviceId:deviceIdRef.current})}),body=await response.json() as {play?:boolean};return response.ok&&Boolean(body.play)}catch{return false}}
+
+  function announce(item: Fulfillment,replay=false) {
     if (!audioEnabledRef.current || !isAudioMasterRef.current) { setAudioStatus("呼出があります。音声担当端末で再生を開始してください"); return; }
     const label = `${item.department === "FOOD" ? "フード" : "ドリンク"} ${String(item.callNumber).padStart(3, "0")}`;
     audioQueue.current = audioQueue.current.catch(()=>undefined).then(async () => {
+      const eventKey=replay?`recall:${item.id}:${Date.now()}:${deviceIdRef.current}`:`call:${item.id}:${item.updatedAt}`;
+      if(!await claimAudioEvent(eventKey,replay?"RECALL":"CALL"))return;
       setAudioStatus(`放送中：${label}`);
       announcementActiveRef.current=true;
       if (bgmRef.current && bgmEnabledRef.current) setBgmVolume(0);
@@ -196,14 +203,16 @@ export default function KitchenBoard({ displayOnly = false }: { displayOnly?: bo
   function announceNewOrder(items: Fulfillment[]) {
     if (!items.length) return;
     if (!audioEnabledRef.current || !isAudioMasterRef.current) {
+      if(!isAudioMasterRef.current)return;
       const orderId=items[0].orderId,current=pendingNewOrders.current.get(orderId)??[],known=new Set(current.map(item=>item.id));
       pendingNewOrders.current.set(orderId,[...current,...items.filter(item=>!known.has(item.id))]);
-      try { localStorage.setItem("aozora-kitchen-pending-announcements",JSON.stringify([...pendingNewOrders.current.entries()])); } catch { /* 放送待ちはメモリで保持 */ }
+      try { sessionStorage.setItem("aozora-kitchen-pending-announcements",JSON.stringify([...pendingNewOrders.current.entries()])); } catch { /* 放送待ちはメモリで保持 */ }
       setAudioStatus(`新しい注文が${pendingNewOrders.current.size}件あります。『音声・BGMを開始』を押してください`);
       return;
     }
     const numbers = items.map((item) => `${item.department === "FOOD" ? "フード" : "ドリンク"}番号、${String(item.callNumber).padStart(3, "0")}番`).join("、");
     audioQueue.current = audioQueue.current.catch(()=>undefined).then(async () => {
+      if(!await claimAudioEvent(`order:${items[0].orderId}`,"NEW_ORDER"))return;
       setAudioStatus(`新規注文：${numbers}`);
       announcementActiveRef.current=true;
       if (bgmRef.current && bgmEnabledRef.current) setBgmVolume(0);
@@ -220,9 +229,11 @@ export default function KitchenBoard({ displayOnly = false }: { displayOnly?: bo
     if (!audioEnabledRef.current || !isAudioMasterRef.current || !pendingNewOrders.current.size) return;
     const queued=[...pendingNewOrders.current.values()];
     pendingNewOrders.current.clear();
-    try { localStorage.removeItem("aozora-kitchen-pending-announcements"); } catch { /* 放送は継続 */ }
+    try { sessionStorage.removeItem("aozora-kitchen-pending-announcements"); } catch { /* 放送は継続 */ }
     queued.forEach(announceNewOrder);
   }
+
+  function announceOutstandingOrders(){const grouped=new Map<string,Fulfillment[]>();[...data.FOOD,...data.DRINK].filter(item=>item.status==="ACCEPTED").forEach(item=>grouped.set(item.orderId,[...(grouped.get(item.orderId)??[]),item]));grouped.forEach(announceNewOrder)}
 
   async function loadEquipment(){try{const response=await fetch("/api/v1/kitchen/equipment",{cache:"no-store"}),body=await response.json();if(response.ok)setFryerPreheatedState(Boolean(body.fryerPreheated))}catch{/* 注文表示は継続 */}}
   async function loadOperations(){
@@ -270,20 +281,30 @@ export default function KitchenBoard({ displayOnly = false }: { displayOnly?: bo
     finally { setLoading(false); }
   }
 
-  useEffect(() => { try { let id=localStorage.getItem("aozora-kitchen-device-id");if(!id){id=`kitchen_${crypto.randomUUID().replaceAll("-","")}`;localStorage.setItem("aozora-kitchen-device-id",id)}deviceIdRef.current=id;deviceNameRef.current=localStorage.getItem("aozora-kitchen-device-name")??`厨房モニター ${id.slice(-4).toUpperCase()}`;const saved=JSON.parse(localStorage.getItem("aozora-kitchen-known-units")??"[]");if(Array.isArray(saved))knownUnits.current=new Set(saved.filter(value=>typeof value==="string"));const pending=JSON.parse(localStorage.getItem("aozora-kitchen-pending-announcements")??"[]");if(Array.isArray(pending))pendingNewOrders.current=new Map(pending); } catch { /* 初回起動として継続 */ } void load(); const timer = window.setInterval(() => void load(true), 4000); return () => window.clearInterval(timer); }, []);
+  useEffect(() => { try { let id=sessionStorage.getItem("aozora-kitchen-audio-device-id");if(!id){id=`kitchen_${crypto.randomUUID().replaceAll("-","")}`;sessionStorage.setItem("aozora-kitchen-audio-device-id",id)}deviceIdRef.current=id;deviceNameRef.current=localStorage.getItem("aozora-kitchen-device-name")??`厨房モニター ${id.slice(-4).toUpperCase()}`;const saved=JSON.parse(localStorage.getItem("aozora-kitchen-known-units")??"[]");if(Array.isArray(saved))knownUnits.current=new Set(saved.filter(value=>typeof value==="string"));const pending=JSON.parse(sessionStorage.getItem("aozora-kitchen-pending-announcements")??"[]");if(Array.isArray(pending))pendingNewOrders.current=new Map(pending); } catch { /* 初回起動として継続 */ } void load(); const timer = window.setInterval(() => void load(true), 4000); return () => window.clearInterval(timer); }, []);
+  useEffect(()=>{const refresh=()=>void load(true),visible=()=>{if(document.visibilityState==="visible")refresh()};window.addEventListener("focus",refresh);window.addEventListener("online",refresh);document.addEventListener("visibilitychange",visible);return()=>{window.removeEventListener("focus",refresh);window.removeEventListener("online",refresh);document.removeEventListener("visibilitychange",visible)}},[]);
   useEffect(() => { const timer = window.setInterval(() => { if (!announcementActiveRef.current && bgmRef.current && bgmEnabledRef.current) setBgmVolume(bgmVolume()); }, 30000); return () => window.clearInterval(timer); }, []);
   useEffect(()=>{const timer=window.setInterval(async()=>{if(!audioEnabledRef.current||!isAudioMasterRef.current||!deviceIdRef.current)return;try{const response=await fetch("/api/v1/kitchen/audio-master",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"HEARTBEAT",deviceId:deviceIdRef.current,deviceName:deviceNameRef.current})});if(!response.ok)throw new Error("AUDIO_MASTER_LOST");const body=await response.json() as {master?:AudioMaster};setAudioMaster(body.master??null)}catch{isAudioMasterRef.current=false;audioEnabledRef.current=false;setAudioEnabled(false);bgmRef.current?.pause();setAudioStatus("音声担当が別端末へ切り替わりました")}},10000);return()=>window.clearInterval(timer)},[]);
   useEffect(()=>{const task=optimizerSelection.focus;if(!task||!deviceId)return;void fetch("/api/v1/kitchen/task-progress",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({taskId:task.id,deviceId})}).catch(()=>undefined)},[optimizerSelection.focus?.id,deviceId]);
+  useEffect(()=>()=>{if(pendingActionTimer.current!==null)window.clearTimeout(pendingActionTimer.current)},[]);
 
   async function act(item: Fulfillment, action: "START" | "STEP" | "CALL" | "PICKUP" | "RESTORE_CALL") {
     setUpdating(item.id); setMessage("");
     try {
       const steps=stepsForUnit(item);const response = await fetch("/api/v1/kitchen/units", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ unitId: item.id, action,totalSteps:action==="STEP"?1:steps.length }) });
       const body = await response.json(); if (!response.ok) throw new Error(body.error ?? "状態を更新できませんでした");
-      if (action === "CALL" || action === "RESTORE_CALL") { previousCalled.current.add(item.id); announce(item); } await load(true);
+      if (action === "CALL" || action === "RESTORE_CALL") { previousCalled.current.add(item.id); announce({...item,...body,items:item.items}); } await load(true);
     } catch (error) { setMessage(error instanceof Error ? friendly(error.message) : "状態を更新できませんでした"); }
     finally { setUpdating(null); }
   }
+
+  function queueAct(item:Fulfillment,action:"START"|"STEP"|"CALL"|"PICKUP"){
+    if(pendingActionTimer.current!==null)window.clearTimeout(pendingActionTimer.current);
+    const label=action==="START"?"作業開始":action==="STEP"?"完成":action==="CALL"?"呼出":"受渡完了";
+    setPendingAction({item,action,label});
+    pendingActionTimer.current=window.setTimeout(()=>{pendingActionTimer.current=null;setPendingAction(null);void act(item,action)},5_000);
+  }
+  function cancelPendingAction(){if(pendingActionTimer.current!==null)window.clearTimeout(pendingActionTimer.current);pendingActionTimer.current=null;setPendingAction(null);setMessage("直前の操作を取り消しました")}
 
   async function submitScheduleAdjustment(){
     if(!scheduleDialog||scheduleDialog.action==="HISTORY")return;setScheduleUpdating(true);setScheduleMessage("");
@@ -331,10 +352,11 @@ export default function KitchenBoard({ displayOnly = false }: { displayOnly?: bo
           <div className="meta-row"><span>{item.department === "FOOD" ? "フード" : "ドリンク"}</span><span>{item.isTest?"テスト注文":"決済済み"}</span><span>{item.estimatedReadyAt ? `提供予定 ${clock(item.estimatedReadyAt)}` : "提供予定 できあがり次第"}</span><span>{elapsed(item.updatedAt)}</span>{risk.level!=="normal"&&<strong className={`schedule-risk risk-${risk.level}`}>{risk.label}</strong>}</div>
           <div className="items">{item.items.map((product, index) => <div className="item" key={`${item.id}-${index}`}><strong className="quantity">{product.quantity}</strong><div><h3>{product.name}</h3>{product.options?.map((option) => <p key={option}>↳ {option}</p>)}</div></div>)}</div>
           {(item.status==="ACCEPTED"||item.status==="COOKING")&&(item.estimatedReadyAt||item.readyAt)&&<div className="schedule-card-tools"><span>注文全体の予定変更</span><button className="schedule-history-button" onClick={()=>void openScheduleHistory(item)}>変更履歴</button><button onClick={()=>setScheduleDialog({item,action:"ADJUST",minutes:5})}>＋5分</button><button onClick={()=>setScheduleDialog({item,action:"ADJUST",minutes:10})}>＋10分</button><button className="schedule-undo" onClick={()=>setScheduleDialog({item,action:"UNDO"})}>直前へ戻す</button></div>}
-          {action && <div className="card-actions">{item.status === "CALLED" && <button className="recall" onClick={() => announce(item)}>♩ 再呼出</button>}<button className="advance" disabled={updating === item.id} onClick={() => void act(item, action.action)}>{updating === item.id ? "更新中…" : action.label} <span>→</span></button></div>}
+          {action && <div className="card-actions">{item.status === "CALLED" && <button className="recall" onClick={() => announce(item,true)}>♩ 再呼出</button>}<button className="advance" disabled={updating === item.id||Boolean(pendingAction)} onClick={() => queueAct(item, action.action)}>{updating === item.id ? "更新中…" : action.label} <span>→</span></button></div>}
         </article>; })}
       </section>
     </>}
+    {pendingAction&&<aside className="quick-undo" role="status"><div><b>{unitCall(pendingAction.item)}を「{pendingAction.label}」にします</b><span>5秒後に反映します。間違いなら今すぐ戻せます。</span></div><button onClick={cancelPendingAction}>取り消す</button></aside>}
     {scheduleDialog&&<div className="schedule-dialog-backdrop" role="presentation" onMouseDown={event=>{if(event.currentTarget===event.target&&!scheduleUpdating)setScheduleDialog(null)}}><section className={`schedule-dialog ${scheduleDialog.action==="HISTORY"?"history-dialog":""}`} role="dialog" aria-modal="true" aria-labelledby="schedule-dialog-title"><small>{scheduleDialog.action==="HISTORY"?"提供予定の変更履歴":"提供予定の変更確認"}</small><h2 id="schedule-dialog-title">{unitCall(scheduleDialog.item)}　{scheduleDialog.item.items.map(item=>item.name).join("・")}</h2>{scheduleDialog.action==="HISTORY"?<>{scheduleHistoryLoading?<p className="schedule-history-empty">変更履歴を取得しています…</p>:scheduleHistory?<><div className="schedule-history-summary"><article><span>当初予定</span><b>{scheduleTimes(scheduleHistory.original)}</b></article><article><span>現在予定</span><b>{scheduleTimes(scheduleHistory.current)}</b></article></div><div className="schedule-history-list">{scheduleHistory.history.length?scheduleHistory.history.map((entry,index)=><article key={`${entry.calculatedAt}-${index}`}><time>{dateTime(entry.calculatedAt)}</time><div><b>{entry.reason||"予定時刻を計算"}</b><span>{scheduleTimes(entry)}</span></div><em className={entry.mode==="MANUAL"?"manual":"automatic"}>{entry.mode==="MANUAL"?"手動":"自動"}</em></article>):<p className="schedule-history-empty">変更履歴はまだありません</p>}</div></>:null}<div className="schedule-dialog-actions single"><button onClick={()=>setScheduleDialog(null)}>閉じる</button></div></>:scheduleDialog.action==="ADJUST"?<><p>同じ注文のフード・ドリンク提供予定を<strong>{scheduleDialog.minutes}分延長</strong>します。理由を選んで確定してください。</p><div className="schedule-reasons">{["混雑","調理遅延","機器待ち","材料確認"].map(reason=><button className={scheduleReason===reason?"active":""} key={reason} onClick={()=>setScheduleReason(reason)}>{reason}</button>)}</div><div className="schedule-dialog-actions"><button disabled={scheduleUpdating} onClick={()=>setScheduleDialog(null)}>やめる</button><button className="confirm" disabled={scheduleUpdating} onClick={()=>void submitScheduleAdjustment()}>{scheduleUpdating?"反映中…":`${scheduleDialog.minutes}分延長を確定`}</button></div></>:<><p>この注文の提供予定を、変更履歴に残っている<strong>直前の時刻へ戻します</strong>。</p><div className="schedule-dialog-actions"><button disabled={scheduleUpdating} onClick={()=>setScheduleDialog(null)}>やめる</button><button className="confirm" disabled={scheduleUpdating} onClick={()=>void submitScheduleAdjustment()}>{scheduleUpdating?"反映中…":"直前の予定へ戻す"}</button></div></>}</section></div>}
   </main>;
 }
