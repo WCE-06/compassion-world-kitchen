@@ -176,6 +176,15 @@ test("いまやる作業の表示から完了までを直接計測する",async(
   assert.match(schema,/idx_kitchen_task_starts_started/);
 });
 
+test("最終工程の完了時に商品を自動で完成へ進め、予定時刻前でも呼び出せる",async()=>{
+  const source=await readFile(new URL("../app/kitchen-board.tsx",import.meta.url),"utf8");
+  assert.match(source,/markFinishedUnitsReady/);
+  assert.match(source,/tasks\.every\(task=>completedIds\.has\(task\.id\)\)/);
+  assert.match(source,/action:"STEP",totalSteps:1/);
+  assert.match(source,/提供予定時刻を待たずに呼び出せます/);
+  assert.doesNotMatch(source,/Date\.now\(\).*action:"CALL"/);
+});
+
 test("提供予定の接近と超過を警告して最短工程へ反映する",async()=>{
   const [board,styles]=await Promise.all([
     readFile(new URL("../app/kitchen-board.tsx",import.meta.url),"utf8"),

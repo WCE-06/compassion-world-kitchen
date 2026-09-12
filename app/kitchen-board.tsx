@@ -72,12 +72,23 @@ export default function KitchenBoard({ displayOnly = false }: { displayOnly?: bo
     try{
       const response=await fetch("/api/v1/kitchen/task-progress",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({taskId:task.id,title:task.title,calls:task.calls,equipment:task.equipment,expectedMinutes:task.minutes,completed,deviceId:deviceIdRef.current})});
       const body=await response.json();if(!response.ok)throw new Error(body.error??"工程を保存できませんでした");
-      if(completed)void recalculateAfterProgress(task);
+      if(completed){await recalculateAfterProgress(task);const readyCalls=await markFinishedUnitsReady(task);if(readyCalls.length)setMessage(`${readyCalls.join("・")}が完成しました。提供予定時刻を待たずに呼び出せます`)}
     }catch(error){
       setOptimizerDone(current=>{const next=new Set(current);if(completed)next.delete(task.id);else next.add(task.id);return next});
       setOptimizerHistory(current=>completed?current.filter(id=>id!==task.id):[...current,task.id]);
       setMessage(error instanceof Error?friendly(error.message):"工程を保存できませんでした");
     }finally{setTaskUpdating(null)}
+  };
+  const markFinishedUnitsReady=async(completedTask:OptimizedTask)=>{
+    const completedIds=new Set([...optimizerDone,completedTask.id]),active=[...data.FOOD,...data.DRINK].filter(item=>item.status==="ACCEPTED"||item.status==="COOKING");
+    const finished=active.filter(item=>{const call=unitCall(item),tasks=optimizedTasks.filter(task=>task.calls.includes(call));return tasks.length>0&&tasks.every(task=>completedIds.has(task.id))});
+    const readyCalls:string[]=[];
+    for(const item of finished){
+      const response=await fetch("/api/v1/kitchen/units",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({unitId:item.id,action:"STEP",totalSteps:1})});
+      if(response.ok)readyCalls.push(unitCall(item));else{const body=await response.json().catch(()=>({})) as {error?:string};if(body.error!=="INVALID_STATUS_TRANSITION")throw new Error(body.error??"完成状態を更新できませんでした")}
+    }
+    if(finished.length)await load(true);
+    return readyCalls;
   };
   const recalculateAfterProgress=async(completedTask:OptimizedTask)=>{
     const active=[...data.FOOD,...data.DRINK].filter(item=>item.status==="ACCEPTED"||item.status==="COOKING"),affectedOrderIds=new Set(active.filter(item=>completedTask.calls.includes(unitCall(item))).map(item=>item.orderId));
