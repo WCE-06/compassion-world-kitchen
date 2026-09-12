@@ -320,6 +320,9 @@ test("完成品を画面上部から予定時刻前でも呼び出せる",async(
     readFile(new URL("../app/globals.css",import.meta.url),"utf8"),
   ]);
   assert.match(board,/readyToCall/);
+  assert.match(board,/related\.every\(task=>optimizerDone\.has\(task\.id\)\)/);
+  assert.match(board,/callCompletedItem/);
+  assert.match(board,/body\.current\?\.status!=="READY"/);
   assert.match(board,/完成しました。できた商品から呼び出してください/);
   assert.match(board,/予定時刻前でも呼出可能/);
   assert.match(board,/queueAct\(item,"CALL"\)/);

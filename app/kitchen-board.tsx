@@ -309,6 +309,20 @@ export default function KitchenBoard({ displayOnly = false }: { displayOnly?: bo
     finally { setUpdating(null); }
   }
 
+  async function callCompletedItem(item:Fulfillment){
+    if(item.status==="READY"){queueAct(item,"CALL");return}
+    setUpdating(item.id);setMessage("");
+    try{
+      const response=await fetch("/api/v1/kitchen/units",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({unitId:item.id,action:"STEP",totalSteps:1})});
+      const body=await response.json() as Partial<Fulfillment>&{error?:string;current?:{status?:string}};
+      if(!response.ok&&body.current?.status!=="READY")throw new Error(body.error??"完成状態を更新できませんでした");
+      const readyItem={...item,...body,status:"READY" as const};
+      await load(true);
+      queueAct(readyItem,"CALL");
+    }catch(error){setMessage(error instanceof Error?friendly(error.message):"呼び出し準備ができませんでした")}
+    finally{setUpdating(null)}
+  }
+
   function queueAct(item:Fulfillment,action:"START"|"STEP"|"CALL"|"PICKUP"){
     if(pendingActionTimer.current!==null)window.clearTimeout(pendingActionTimer.current);
     const label=action==="START"?"作業開始":action==="STEP"?"完成":action==="CALL"?"呼出":"受渡完了";
@@ -331,7 +345,12 @@ export default function KitchenBoard({ displayOnly = false }: { displayOnly?: bo
   const current = useMemo(() => (department === "ALL" ? [...data.FOOD, ...data.DRINK] : [...data[department]]).sort(orderPriority), [data, department]);
   const preparing = useMemo(() => uniqueMonitorUnits([...data.FOOD, ...data.DRINK].filter((item) => item.status === "ACCEPTED" || item.status === "COOKING" || item.status === "READY").sort((a, b) => a.updatedAt - b.updatedAt)), [data]);
   const called = useMemo(() => uniqueMonitorUnits([...data.FOOD, ...data.DRINK].filter((item) => item.status === "CALLED").sort((a, b) => (b.calledAt ?? 0) - (a.calledAt ?? 0))), [data]);
-  const readyToCall = useMemo(() => [...data.FOOD, ...data.DRINK].filter((item) => item.status === "READY").sort((a,b)=>a.updatedAt-b.updatedAt), [data]);
+  const readyToCall = useMemo(() => [...data.FOOD, ...data.DRINK].filter((item) => {
+    if(item.status==="READY")return true;
+    if(item.status!=="ACCEPTED"&&item.status!=="COOKING")return false;
+    const related=optimizedTasks.filter(task=>task.calls.includes(unitCall(item)));
+    return related.length>0&&related.every(task=>optimizerDone.has(task.id));
+  }).sort((a,b)=>a.updatedAt-b.updatedAt), [data,optimizedTasks,optimizerDone]);
   const scheduleAlerts=useMemo(()=>{const attention=[...data.FOOD,...data.DRINK].filter(item=>item.status==="ACCEPTED"||item.status==="COOKING").map(item=>({item,risk:scheduleRisk(item)})).filter(row=>row.risk.level!=="normal").sort((a,b)=>(a.risk.remainingMs??Number.MAX_SAFE_INTEGER)-(b.risk.remainingMs??Number.MAX_SAFE_INTEGER));return{attention,overdue:attention.filter(row=>row.risk.level==="overdue").length,urgent:attention.filter(row=>row.risk.level==="urgent").length}},[data]);
   const count = (status: Status) => [...data.FOOD, ...data.DRINK].filter((item) => item.status === status).length;
 
@@ -349,7 +368,7 @@ export default function KitchenBoard({ displayOnly = false }: { displayOnly?: bo
       </div>
     </section> : <>
       <div className="staff-audio-bar"><div><b>呼出音声・店内BGM</b><span>{audioStatus}</span><small>{audioMaster?.deviceId===deviceId?"この端末が音声担当":audioMaster?`音声担当：${audioMaster.deviceName}`:"音声担当は未設定"}</small></div><button className={audioEnabled ? "enabled" : ""} onClick={() => void enableAudio()}>{audioEnabled ? "音声 有効 ✓" : "▶ この端末で音声開始"}</button>{audioMaster&&audioMaster.deviceId!==deviceId&&<button className="audio-takeover" onClick={()=>void takeOverAudio()}>この端末へ切替</button>}<button className="bgm-toggle" disabled={!audioEnabled || testingFull} onClick={toggleBgm}>{bgmEnabled ? "BGM ON" : "BGM OFF"}</button><button className="volume-test" disabled={!audioEnabled||testingFull} onClick={() => void testFullVolume()}>{testingFull ? "100%テスト中…" : "100%を3秒テスト"}</button><button className={`fryer-state ${fryerPreheated?"running":"stopped"}`} disabled={fryerUpdating} onClick={()=>void toggleFryer()}>{fryerUpdating?"更新中…":fryerPreheated?"🔥 200℃稼働中（押すと停止）":"200℃到達 → 稼働中にする"}</button></div>
-      {readyToCall.length>0&&<section className="ready-call-board" aria-label="完成品の呼び出し"><header><div><small>READY TO CALL</small><b>完成しました。できた商品から呼び出してください</b></div><span>{readyToCall.length}件</span></header><div>{readyToCall.map(item=><article className={item.department.toLowerCase()} key={`ready-${item.id}`}><strong>{String(item.callNumber).padStart(3,"0")}</strong><div><b>{item.items.map(product=>product.name).join("・")}</b><span>{item.estimatedReadyAt?`予定 ${clock(item.estimatedReadyAt)}`:"できあがり次第"}・予定時刻前でも呼出可能</span></div><button disabled={updating===item.id||Boolean(pendingAction)} onClick={()=>queueAct(item,"CALL")}>♩ 今すぐ呼び出す</button></article>)}</div></section>}
+      {readyToCall.length>0&&<section className="ready-call-board" aria-label="完成品の呼び出し"><header><div><small>READY TO CALL</small><b>完成しました。できた商品から呼び出してください</b></div><span>{readyToCall.length}件</span></header><div>{readyToCall.map(item=><article className={item.department.toLowerCase()} key={`ready-${item.id}`}><strong>{String(item.callNumber).padStart(3,"0")}</strong><div><b>{item.items.map(product=>product.name).join("・")}</b><span>{item.estimatedReadyAt?`予定 ${clock(item.estimatedReadyAt)}`:"できあがり次第"}・予定時刻前でも呼出可能</span></div><button disabled={updating===item.id||Boolean(taskUpdating)||Boolean(pendingAction)} onClick={()=>void callCompletedItem(item)}>♩ 今すぐ呼び出す</button></article>)}</div></section>}
       {syncHealth&&(!syncHealth.ok||syncHealth.delayedCount>0)&&<section className="sync-alert" role="alert"><div><b>{syncHealth.delayedCount>0?`決済済み注文の未反映を${syncHealth.delayedCount}件検知しました`:"ペイゲートPOSとの同期を確認してください"}</b><span>{syncHealth.lastError??"自動再試行中です。必要なら今すぐ再取得できます。"}</span>{syncHealth.issues.slice(0,3).map(issue=><small key={issue.transactionId}>取引 {issue.transactionId}・再試行 {issue.attemptCount}回{issue.error?`・${issue.error}`:""}</small>)}</div><button disabled={retryingSync} onClick={()=>void retryOrderSync()}>{retryingSync?"再取得中…":"今すぐ再取得"}</button></section>}
       <section className="summary" aria-label="注文サマリー"><div><span>未着手</span><strong>{count("ACCEPTED")}</strong></div><div><span>調理中</span><strong>{count("COOKING")}</strong></div><div><span>完成</span><strong className="ready-number">{count("READY")}</strong></div><div><span>呼出中</span><strong>{count("CALLED")}</strong></div></section>
       <div className="department-tabs"><button className={department === "ALL" ? "active all" : ""} onClick={() => setDepartment("ALL")}>すべて <b>{data.FOOD.length + data.DRINK.length}</b></button><button className={department === "FOOD" ? "active food" : ""} onClick={() => setDepartment("FOOD")}>フード <b>{data.FOOD.length}</b></button><button className={department === "DRINK" ? "active drink" : ""} onClick={() => setDepartment("DRINK")}>ドリンク <b>{data.DRINK.length}</b></button><span>4秒ごとに自動更新</span></div>
