@@ -63,6 +63,14 @@ test("旧モニターの録音済み音声で注文通知と番号呼出を行�
   assert.match(source,/source\.onended/);
 });
 
+test("呼出ボタンを押した瞬間に音声を準備して5秒後の放送へ引き継ぐ",async()=>{
+  const board=await readFile(new URL("../app/kitchen-board.tsx",import.meta.url),"utf8");
+  assert.match(board,/async function prepareCallAudio/);
+  assert.match(board,/await getLegacyVoiceContext\(\);warmUpLegacyVoice\(\)/);
+  assert.match(board,/action==="CALL"\?prepareCallAudio\(\):Promise\.resolve\(\)/);
+  assert.match(board,/audioPreparation\.then\(\(\)=>act\(item,action\)\)/);
+});
+
 test("呼出専用画面は管理画面と同じ2列カードで番号を重ねない",async()=>{
   const css=await readFile(new URL("../app/globals.css",import.meta.url),"utf8");
   assert.match(css,/呼出専用画面：管理画面の呼出モニターと同じ左右2列レイアウト/);

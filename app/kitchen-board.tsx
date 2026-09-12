@@ -193,6 +193,13 @@ export default function KitchenBoard({ displayOnly = false }: { displayOnly?: bo
 
   async function claimAudioEvent(eventKey:string,eventType:string){if(!deviceIdRef.current)return false;try{const response=await fetch("/api/v1/kitchen/audio-events",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({eventKey,eventType,deviceId:deviceIdRef.current})}),body=await response.json() as {play?:boolean};return response.ok&&Boolean(body.play)}catch{return false}}
 
+  async function prepareCallAudio(){
+    try{await getLegacyVoiceContext();warmUpLegacyVoice()}catch{/* 音声ファイル失敗時は読み上げへフォールバック */}
+    if(audioEnabledRef.current&&isAudioMasterRef.current)return;
+    if(audioMaster&&audioMaster.deviceId!==deviceIdRef.current)return;
+    await enableAudio();
+  }
+
   function announce(item: Fulfillment,replay=false) {
     if (!audioEnabledRef.current || !isAudioMasterRef.current) { setAudioStatus("呼出があります。音声担当端末で再生を開始してください"); return; }
     const label = `${item.department === "FOOD" ? "フード" : "ドリンク"} ${String(item.callNumber).padStart(3, "0")}`;
@@ -325,9 +332,10 @@ export default function KitchenBoard({ displayOnly = false }: { displayOnly?: bo
 
   function queueAct(item:Fulfillment,action:"START"|"STEP"|"CALL"|"PICKUP"){
     if(pendingActionTimer.current!==null)window.clearTimeout(pendingActionTimer.current);
+    const audioPreparation=action==="CALL"?prepareCallAudio():Promise.resolve();
     const label=action==="START"?"作業開始":action==="STEP"?"完成":action==="CALL"?"呼出":"受渡完了";
     setPendingAction({item,action,label});
-    pendingActionTimer.current=window.setTimeout(()=>{pendingActionTimer.current=null;setPendingAction(null);void act(item,action)},5_000);
+    pendingActionTimer.current=window.setTimeout(()=>{pendingActionTimer.current=null;setPendingAction(null);void audioPreparation.then(()=>act(item,action))},5_000);
   }
   function cancelPendingAction(){if(pendingActionTimer.current!==null)window.clearTimeout(pendingActionTimer.current);pendingActionTimer.current=null;setPendingAction(null);setMessage("直前の操作を取り消しました")}
 
