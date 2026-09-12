@@ -313,3 +313,29 @@ test("フライヤー標準を200℃4分で統一する",async()=>{
   assert.match(master,/揚げ物基本 200℃・4分/);
   assert.doesNotMatch(master,/180℃/);
 });
+
+test("完成品を画面上部から予定時刻前でも呼び出せる",async()=>{
+  const [board,styles]=await Promise.all([
+    readFile(new URL("../app/kitchen-board.tsx",import.meta.url),"utf8"),
+    readFile(new URL("../app/globals.css",import.meta.url),"utf8"),
+  ]);
+  assert.match(board,/readyToCall/);
+  assert.match(board,/完成しました。できた商品から呼び出してください/);
+  assert.match(board,/予定時刻前でも呼出可能/);
+  assert.match(board,/queueAct\(item,"CALL"\)/);
+  assert.match(styles,/\.ready-call-board/);
+});
+
+test("営業時間画面から共通ジャンル別提供時間を管理する",async()=>{
+  const [manager,proxy,styles]=await Promise.all([
+    readFile(new URL("../app/business-hours-manager.tsx",import.meta.url),"utf8"),
+    readFile(new URL("../app/api/v1/kitchen/menu-availability/route.ts",import.meta.url),"utf8"),
+    readFile(new URL("../app/globals.css",import.meta.url),"utf8"),
+  ]);
+  assert.match(manager,/ジャンル別の提供曜日・時間/);
+  assert.match(manager,/平日のご飯ものを停止/);
+  assert.match(manager,/\/api\/v1\/kitchen\/menu-availability/);
+  assert.match(proxy,/category-schedules/);
+  assert.match(proxy,/KITCHEN_API_TOKEN/);
+  assert.match(styles,/\.category-availability/);
+});
