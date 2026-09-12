@@ -2,6 +2,9 @@
 
 import { ChangeEvent, useEffect, useRef, useState } from "react";
 
+type OptionChoice = { id:string; name:string; priceDelta:number; preparationMinutesDelta:number; displaySequence:number; enabled:boolean };
+type OptionGroup = { id:string; productCode:string; name:string; type:"single"|"multiple"; required:boolean; minChoices:number; maxChoices:number; displaySequence:number; enabled:boolean; choices:OptionChoice[] };
+
 type MenuItem = {
   id: string;
   name: string;
@@ -16,10 +19,11 @@ type MenuItem = {
   menuCategory: string;
   displaySequence: number;
   status: "PUBLISHED" | "DRAFT";
+  optionGroups: OptionGroup[];
 };
 type Category = { categoryId: string; categoryName: string };
 type CatalogResponse = {
-  products?: { productId: string; categoryId: string; productCode: string; productName: string; price: string; taxDivision?: "0" | "1"; displayFlag?:string; imageUrl?: string; soldOut?: boolean; menuCategory?: string; displaySequence?: number | string; showOnSelfRegister?: boolean; showOnMobileOrder?: boolean }[];
+  products?: { productId: string; categoryId: string; productCode: string; productName: string; price: string; taxDivision?: "0" | "1"; displayFlag?:string; imageUrl?: string; soldOut?: boolean; menuCategory?: string; displaySequence?: number | string; showOnSelfRegister?: boolean; showOnMobileOrder?: boolean; optionGroups?:OptionGroup[] }[];
   categories?: Category[];
   environment?: "sandbox" | "production";
   source?: "shared-catalog" | "smaregi-production";
@@ -71,6 +75,7 @@ export default function MenuManager() {
         menuCategory: item.menuCategory ?? "food-side",
         displaySequence: Number(item.displaySequence ?? 999999999),
         status: "PUBLISHED",
+        optionGroups: item.optionGroups ?? [],
       })));
     } catch (error) {
       setMenus([]);
@@ -85,7 +90,7 @@ export default function MenuManager() {
   useEffect(() => { void loadCatalog(); }, []);
 
   function openForm(item?: MenuItem) {
-    setEditing(item ? { ...item } : { id: "", name: "", code: "", price: 0, taxDivision: "1", category: "FOOD", smaregiCategoryId: categories[0]?.categoryId ?? "", menuCategory, displaySequence: 999999999, published: true, status: "DRAFT" });
+    setEditing(item ? { ...item, optionGroups:item.optionGroups.map((group) => ({ ...group, choices:group.choices.map((choice) => ({ ...choice })) })) } : { id: "", name: "", code: "", price: 0, taxDivision: "1", category: "FOOD", smaregiCategoryId: categories[0]?.categoryId ?? "", menuCategory, displaySequence: 999999999, published: true, status: "DRAFT", optionGroups:[] });
     setNotice("");
   }
 
@@ -134,7 +139,7 @@ export default function MenuManager() {
   }
 
   async function save() {
-    if (!editing?.name.trim() || !editing.code.trim() || editing.price <= 0 || !editing.smaregiCategoryId) {
+    if (!editing?.code.trim() || (!sharedCatalog && (!editing.name.trim() || editing.price <= 0 || !editing.smaregiCategoryId))) {
       setNotice("商品名、商品コード、価格、スマレジ部門を入力してください");
       return;
     }
@@ -142,22 +147,36 @@ export default function MenuManager() {
     setNotice("");
     const existing = Boolean(editing.id);
     try {
-      const response = await fetch(existing ? `/api/v1/smaregi/catalog/${editing.id}` : "/api/v1/smaregi/catalog", {
-        method: existing ? "PATCH" : "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ categoryId: editing.smaregiCategoryId, productCode: editing.code, productName: editing.name, price: editing.price, taxDivision: editing.taxDivision, soldOut:editing.soldOut }),
-      });
-      const body = await response.json() as { error?: string };
-      if (!response.ok) throw new Error(body.error ?? "スマレジ更新に失敗しました");
+      if (!sharedCatalog) {
+        const response = await fetch(existing ? `/api/v1/smaregi/catalog/${editing.id}` : "/api/v1/smaregi/catalog", {
+          method: existing ? "PATCH" : "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ categoryId: editing.smaregiCategoryId, productCode: editing.code, productName: editing.name, price: editing.price, taxDivision: editing.taxDivision, soldOut:editing.soldOut }),
+        });
+        const body = await response.json() as { error?: string };
+        if (!response.ok) throw new Error(body.error ?? "スマレジ更新に失敗しました");
+      }
+      const optionResponse = await fetch("/api/v1/kitchen/menu-options", { method:"PUT", headers:{ "Content-Type":"application/json" }, body:JSON.stringify({ productCode:editing.code, optionGroups:editing.optionGroups }) });
+      const optionBody = await optionResponse.json() as { error?:string };
+      if (!optionResponse.ok) throw new Error(optionBody.error ?? "トッピングを保存できませんでした");
       setEditing(null);
       await loadCatalog();
-      setNotice(existing ? "スマレジの商品情報を更新しました" : "スマレジへ新商品を登録しました");
+      setNotice(sharedCatalog ? "トッピング設定を共通メニューへ保存しました" : existing ? "商品情報とトッピングを更新しました" : "商品とトッピングを登録しました");
     } catch (error) {
       setNotice(error instanceof Error ? friendlyError(error.message) : "スマレジ更新に失敗しました");
     } finally {
       setSaving(false);
     }
   }
+
+  const makeId = (prefix:string) => `${prefix}_${crypto.randomUUID()}`;
+  function addOptionGroup() { if (!editing) return; setEditing({ ...editing, optionGroups:[...editing.optionGroups,{ id:makeId("mog"),productCode:editing.code,name:"",type:"single",required:false,minChoices:0,maxChoices:1,displaySequence:(editing.optionGroups.length+1)*10,enabled:true,choices:[] }] }); }
+  function updateGroup(index:number, patch:Partial<OptionGroup>) { if (!editing) return; setEditing({ ...editing, optionGroups:editing.optionGroups.map((group,i)=>i===index?{...group,...patch}:group) }); }
+  function removeGroup(index:number) { if (!editing) return; setEditing({ ...editing, optionGroups:editing.optionGroups.filter((_,i)=>i!==index) }); }
+  function moveGroup(index:number, delta:-1|1) { if (!editing) return; const groups=[...editing.optionGroups], target=index+delta;if(!groups[target])return;[groups[index],groups[target]]=[groups[target],groups[index]];setEditing({...editing,optionGroups:groups}); }
+  function addChoice(groupIndex:number) { if (!editing)return; const groups=editing.optionGroups.map((group,index)=>index===groupIndex?{...group,choices:[...group.choices,{id:makeId("moc"),name:"",priceDelta:0,preparationMinutesDelta:0,displaySequence:(group.choices.length+1)*10,enabled:true}]}:group);setEditing({...editing,optionGroups:groups}); }
+  function updateChoice(groupIndex:number,choiceIndex:number,patch:Partial<OptionChoice>){if(!editing)return;setEditing({...editing,optionGroups:editing.optionGroups.map((group,index)=>index===groupIndex?{...group,choices:group.choices.map((choice,i)=>i===choiceIndex?{...choice,...patch}:choice)}:group)});}
+  function removeChoice(groupIndex:number,choiceIndex:number){if(!editing)return;setEditing({...editing,optionGroups:editing.optionGroups.map((group,index)=>index===groupIndex?{...group,choices:group.choices.filter((_,i)=>i!==choiceIndex)}:group)});}
+  function moveChoice(groupIndex:number,choiceIndex:number,delta:-1|1){if(!editing)return;const groups=editing.optionGroups.map((group,index)=>{if(index!==groupIndex)return group;const choices=[...group.choices],target=choiceIndex+delta;if(!choices[target])return group;[choices[choiceIndex],choices[target]]=[choices[target],choices[choiceIndex]];return{...group,choices};});setEditing({...editing,optionGroups:groups});}
 
   async function toggleSoldOut(item:MenuItem){
     const soldOut=!item.soldOut;setMutatingId(item.id);setMenus(current=>current.map(menu=>menu.id===item.id?{...menu,soldOut}:menu));setNotice(`${item.name}を${soldOut?"売り切れ":"販売中"}へ変更しました。スマレジへ同期中…`);
@@ -198,20 +217,36 @@ export default function MenuManager() {
 
         <div className="editor-card details-editor">
           <div className="section-title"><span>02</span><div><h2>基本情報</h2><p>保存するとスマレジの商品マスタへ直接反映されます</p></div></div>
-          <label>商品名<input value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} placeholder="例：季節野菜のカレー" /></label>
+          {sharedCatalog && <div className="publish-note"><b>商品本体はスマレジで管理中</b><p>この画面では、この商品に紐づくトッピング・オプションだけ編集できます。</p></div>}
+          <label>商品名<input disabled={sharedCatalog} value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} placeholder="例：季節野菜のカレー" /></label>
           <div className="field-row">
-            <label>商品コード<input value={editing.code} onChange={(e) => setEditing({ ...editing, code: e.target.value })} placeholder="CW-1003" /></label>
-            <label>{editing.taxDivision === "1" ? "税抜価格" : "税込価格"}<div className="price-input"><span>¥</span><input type="number" min="0" step="1" value={editing.price || ""} onChange={(e) => setEditing({ ...editing, price: Number(e.target.value) })} /></div></label>
+            <label>商品コード<input disabled={sharedCatalog} value={editing.code} onChange={(e) => setEditing({ ...editing, code: e.target.value })} placeholder="CW-1003" /></label>
+            <label>{editing.taxDivision === "1" ? "税抜価格" : "税込価格"}<div className="price-input"><span>¥</span><input disabled={sharedCatalog} type="number" min="0" step="1" value={editing.price || ""} onChange={(e) => setEditing({ ...editing, price: Number(e.target.value) })} /></div></label>
           </div>
-          <label>価格の税区分<select value={editing.taxDivision} onChange={(e) => setEditing({ ...editing, taxDivision: e.target.value as "0" | "1" })}><option value="1">税抜価格＋税</option><option value="0">税込価格</option></select></label>
-          <label>スマレジ部門<select value={editing.smaregiCategoryId} onChange={(e) => setEditing({ ...editing, smaregiCategoryId: e.target.value })}><option value="">部門を選択</option>{categories.map((category) => <option value={category.categoryId} key={category.categoryId}>{category.categoryName}</option>)}</select></label>
+          <label>価格の税区分<select disabled={sharedCatalog} value={editing.taxDivision} onChange={(e) => setEditing({ ...editing, taxDivision: e.target.value as "0" | "1" })}><option value="1">税抜価格＋税</option><option value="0">税込価格</option></select></label>
+          <label>スマレジ部門<select disabled={sharedCatalog} value={editing.smaregiCategoryId} onChange={(e) => setEditing({ ...editing, smaregiCategoryId: e.target.value })}><option value="">部門を選択</option>{categories.map((category) => <option value={category.categoryId} key={category.categoryId}>{category.categoryName}</option>)}</select></label>
           <label>キッチン区分<select value={editing.category} onChange={(e) => setEditing({ ...editing, category: e.target.value as "FOOD" | "DRINK" })}><option value="FOOD">フード</option><option value="DRINK">ドリンク</option></select></label>
           <label>メニュー説明<textarea rows={4} placeholder="素材や味わいなど、お客様向けの説明を入力" /></label>
           <div className="publish-note"><b>スマレジへ直接反映</b><p>商品名・商品コード・価格・税区分・部門をスマレジ商品マスタへ登録または更新します。</p></div>
         </div>
+
+        <div className="editor-card option-editor">
+          <div className="option-editor-head"><div className="section-title"><span>03</span><div><h2>トッピング・オプション</h2><p>モバイルオーダーとセルフレジで共通利用する選択肢</p></div></div><button type="button" className="add-option-group" onClick={addOptionGroup}>＋ 選択肢グループを追加</button></div>
+          {editing.optionGroups.length === 0 && <div className="empty-options"><b>トッピングは未設定です</b><span>「マヨネーズ」「ご飯量」など、商品ごとの選択肢を追加できます。</span></div>}
+          <div className="option-group-list">
+            {editing.optionGroups.map((group,groupIndex)=><section className="option-group" key={group.id}>
+              <div className="option-group-title"><div className="option-order"><button type="button" disabled={groupIndex===0} onClick={()=>moveGroup(groupIndex,-1)}>↑</button><button type="button" disabled={groupIndex===editing.optionGroups.length-1} onClick={()=>moveGroup(groupIndex,1)}>↓</button></div><label>グループ名<input value={group.name} onChange={(event)=>updateGroup(groupIndex,{name:event.target.value})} placeholder="例：マヨネーズ" /></label><button type="button" className="remove-option" onClick={()=>removeGroup(groupIndex)}>グループを削除</button></div>
+              <div className="option-rules"><label>選び方<select value={group.type} onChange={(event)=>updateGroup(groupIndex,{type:event.target.value as "single"|"multiple",maxChoices:event.target.value==="single"?1:Math.max(1,group.maxChoices)})}><option value="single">1つだけ選択</option><option value="multiple">複数選択</option></select></label><label className="check-label"><input type="checkbox" checked={group.required} onChange={(event)=>updateGroup(groupIndex,{required:event.target.checked,minChoices:event.target.checked?Math.max(1,group.minChoices):0})} />選択を必須にする</label>{group.type==="multiple"&&<label>最大選択数<input type="number" min="1" max="30" value={group.maxChoices} onChange={(event)=>updateGroup(groupIndex,{maxChoices:Number(event.target.value)})} /></label>}<label className="check-label"><input type="checkbox" checked={group.enabled} onChange={(event)=>updateGroup(groupIndex,{enabled:event.target.checked})} />このグループを表示</label></div>
+              <div className="choice-head"><span>選択肢</span><span>追加料金（税込）</span><span>調理追加</span><span>表示</span><span></span></div>
+              {group.choices.map((choice,choiceIndex)=><div className="option-choice" key={choice.id}><div className="choice-order"><button type="button" disabled={choiceIndex===0} onClick={()=>moveChoice(groupIndex,choiceIndex,-1)}>↑</button><button type="button" disabled={choiceIndex===group.choices.length-1} onClick={()=>moveChoice(groupIndex,choiceIndex,1)}>↓</button></div><input aria-label="選択肢名" value={choice.name} onChange={(event)=>updateChoice(groupIndex,choiceIndex,{name:event.target.value})} placeholder="例：多め" /><div className="compact-price"><span>＋¥</span><input aria-label="追加料金" type="number" min="0" value={choice.priceDelta} onChange={(event)=>updateChoice(groupIndex,choiceIndex,{priceDelta:Number(event.target.value)})} /></div><div className="compact-time"><input aria-label="追加調理時間" type="number" min="0" max="120" value={choice.preparationMinutesDelta} onChange={(event)=>updateChoice(groupIndex,choiceIndex,{preparationMinutesDelta:Number(event.target.value)})} /><span>分</span></div><input aria-label="選択肢を表示" type="checkbox" checked={choice.enabled} onChange={(event)=>updateChoice(groupIndex,choiceIndex,{enabled:event.target.checked})} /><button type="button" className="remove-choice" onClick={()=>removeChoice(groupIndex,choiceIndex)}>削除</button></div>)}
+              <button type="button" className="add-choice" onClick={()=>addChoice(groupIndex)}>＋ 選択肢を追加</button>
+            </section>)}
+          </div>
+          <div className="option-contract-note"><b>共通メニューへ反映</b><span>保存後、同じ商品コードを使うモバイルオーダー・セルフレジ・キッチンの調理時間計算から取得できます。</span></div>
+        </div>
       </div>
       {notice && <p className="form-notice" role="alert">{notice}</p>}
-      <footer className="editor-footer"><button className="secondary" onClick={() => setEditing(null)}>キャンセル</button><button className="primary" disabled={saving} onClick={save}>{saving ? "スマレジへ保存中…" : editing.id ? "スマレジを更新" : "スマレジへ登録"}</button></footer>
+      <footer className="editor-footer"><button className="secondary" onClick={() => setEditing(null)}>キャンセル</button><button className="primary" disabled={saving} onClick={save}>{saving ? "保存中…" : sharedCatalog ? "トッピングを保存" : editing.id ? "商品とトッピングを更新" : "商品とトッピングを登録"}</button></footer>
     </section>
   );
 
@@ -238,7 +273,7 @@ export default function MenuManager() {
           <div className={`menu-thumb ${item.image ? "has-image" : ""}`}>{item.image ? <>{/* eslint-disable-next-line @next/next/no-img-element */}<img src={item.image} alt="" /></> : <span>POS</span>}</div>
           <div className="sortable-menu-info"><b>{item.name}</b><span>¥{item.price.toLocaleString("ja-JP")}</span><small>{item.code || "コードなし"}{item.soldOut ? "・売切" : ""}{!item.published ? "・非掲載" : ""}</small></div>
           <div className="order-controls"><button disabled={index === 0} onClick={() => nudgeMenu(item.id, -1)} aria-label={`${item.name}を上へ`}>↑</button><button disabled={index === visibleMenus.length - 1} onClick={() => nudgeMenu(item.id, 1)} aria-label={`${item.name}を下へ`}>↓</button></div>
-          <div className="menu-item-actions"><button className={`soldout-menu ${item.soldOut?"active":""}`} disabled={sharedCatalog||mutatingId===item.id} onClick={()=>void toggleSoldOut(item)}>{mutatingId===item.id?"更新中":item.soldOut?"販売再開":"売り切れ"}</button><button className="edit-menu" disabled={sharedCatalog||mutatingId===item.id} onClick={() => openForm(item)}>編集</button><button className={`publication-menu ${!item.published?"inactive":""}`} disabled={mutatingId===item.id} onClick={()=>void togglePublication(item)}>{mutatingId===item.id?"更新中":item.published?"掲載停止":"再掲載"}</button></div>
+          <div className="menu-item-actions"><button className={`soldout-menu ${item.soldOut?"active":""}`} disabled={sharedCatalog||mutatingId===item.id} onClick={()=>void toggleSoldOut(item)}>{mutatingId===item.id?"更新中":item.soldOut?"販売再開":"売り切れ"}</button><button className="edit-menu" disabled={mutatingId===item.id} onClick={() => openForm(item)}>{item.optionGroups.length>0?`編集（選択肢${item.optionGroups.length}）`:"編集"}</button><button className={`publication-menu ${!item.published?"inactive":""}`} disabled={mutatingId===item.id} onClick={()=>void togglePublication(item)}>{mutatingId===item.id?"更新中":item.published?"掲載停止":"再掲載"}</button></div>
         </article>)}
       </div>
       <button className="reload-catalog" onClick={() => void loadCatalog()} disabled={loading}>↻ スマレジから再取得</button>

@@ -66,6 +66,30 @@ export const kitchenTaskEvents = sqliteTable("kitchen_task_events", {
   deviceId: text("device_id").notNull(),
 }, (table) => [index("idx_kitchen_task_events_created").on(table.createdAt)]);
 
+export const menuOptionGroups = sqliteTable("menu_option_groups", {
+  id: text("id").primaryKey(),
+  productCode: text("product_code").notNull(),
+  name: text("name").notNull(),
+  selectionType: text("selection_type").notNull(),
+  required: integer("required", { mode: "boolean" }).notNull().default(false),
+  minChoices: integer("min_choices").notNull().default(0),
+  maxChoices: integer("max_choices").notNull().default(1),
+  displaySequence: integer("display_sequence").notNull().default(0),
+  enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
+  updatedAt: integer("updated_at").notNull(),
+}, (table) => [index("idx_menu_option_groups_product_order").on(table.productCode, table.displaySequence)]);
+
+export const menuOptionChoices = sqliteTable("menu_option_choices", {
+  id: text("id").primaryKey(),
+  groupId: text("group_id").notNull(),
+  name: text("name").notNull(),
+  priceDelta: integer("price_delta").notNull().default(0),
+  preparationMinutesDelta: integer("preparation_minutes_delta").notNull().default(0),
+  displaySequence: integer("display_sequence").notNull().default(0),
+  enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
+  updatedAt: integer("updated_at").notNull(),
+}, (table) => [index("idx_menu_option_choices_group_order").on(table.groupId, table.displaySequence)]);
+
 export const scheduleSchema = [
   `CREATE TABLE IF NOT EXISTS order_schedules (
     order_id TEXT PRIMARY KEY,
@@ -178,4 +202,28 @@ export const scheduleSchema = [
     device_id TEXT NOT NULL
   )`,
   `CREATE INDEX IF NOT EXISTS idx_kitchen_task_events_created ON kitchen_task_events(created_at)`,
+  `CREATE TABLE IF NOT EXISTS menu_option_groups (
+    id TEXT PRIMARY KEY,
+    product_code TEXT NOT NULL,
+    name TEXT NOT NULL,
+    selection_type TEXT NOT NULL,
+    required INTEGER NOT NULL DEFAULT 0,
+    min_choices INTEGER NOT NULL DEFAULT 0,
+    max_choices INTEGER NOT NULL DEFAULT 1,
+    display_sequence INTEGER NOT NULL DEFAULT 0,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    updated_at INTEGER NOT NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_menu_option_groups_product_order ON menu_option_groups(product_code, display_sequence)`,
+  `CREATE TABLE IF NOT EXISTS menu_option_choices (
+    id TEXT PRIMARY KEY,
+    group_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    price_delta INTEGER NOT NULL DEFAULT 0,
+    preparation_minutes_delta INTEGER NOT NULL DEFAULT 0,
+    display_sequence INTEGER NOT NULL DEFAULT 0,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    updated_at INTEGER NOT NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_menu_option_choices_group_order ON menu_option_choices(group_id, display_sequence)`,
 ] as const;

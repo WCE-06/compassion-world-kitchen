@@ -2,6 +2,17 @@
 
 ベースパスは `/api/v1`。時刻はISO 8601、金額は税込・整数円、識別子は不透明な文字列として扱います。既存の会員証APIが返すフィールドは削除・改名せず、追加フィールドは後方互換な拡張として導入します。
 
+## 商品トッピング・オプション
+
+商品本体はスマレジの商品コードを識別子として利用し、スマレジにない選択肢グループをキッチン管理で保持します。
+
+```http
+GET /api/v1/menu/options?productCode=29xxxxxxxxxxx
+Authorization: Bearer KITCHEN_API_TOKEN
+```
+
+`productCode`を省略すると全商品の設定を返します。各グループには`type`（`single` / `multiple`）、`required`、`minChoices`、`maxChoices`、各選択肢には`priceDelta`（税込追加料金）と`preparationMinutesDelta`（追加調理分）を含みます。モバイルオーダーとセルフレジは、メニュー表示および注文確定直前にこの正本を取得してください。
+
 ## 注文状態
 
 ```text

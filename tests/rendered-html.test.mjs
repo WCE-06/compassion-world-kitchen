@@ -22,6 +22,25 @@ test("キッチンモニターをサーバーレンダリングする", async ()
   assert.doesNotMatch(html, /react-loading-skeleton/);
 });
 
+test("商品ごとのトッピングを共通メニューとして編集・配信する",async()=>{
+  const [view,management,publicApi,schema,catalog]=await Promise.all([
+    readFile(new URL("../app/menu-manager.tsx",import.meta.url),"utf8"),
+    readFile(new URL("../app/api/v1/kitchen/menu-options/route.ts",import.meta.url),"utf8"),
+    readFile(new URL("../app/api/v1/menu/options/route.ts",import.meta.url),"utf8"),
+    readFile(new URL("../db/schema.ts",import.meta.url),"utf8"),
+    readFile(new URL("../app/api/v1/smaregi/catalog/route.ts",import.meta.url),"utf8"),
+  ]);
+  assert.match(view,/トッピング・オプション/);
+  assert.match(view,/追加料金（税込）/);
+  assert.match(view,/最大選択数/);
+  assert.match(view,/preparationMinutesDelta/);
+  assert.match(management,/replaceMenuOptionGroups/);
+  assert.match(publicApi,/requireScheduleToken/);
+  assert.match(schema,/menu_option_groups/);
+  assert.match(schema,/menu_option_choices/);
+  assert.match(catalog,/optionsByCode/);
+});
+
 test("ちょこっとライスを150gとして調理指示する",async()=>{
   const source=await readFile(new URL("../app/kitchen-board.tsx",import.meta.url),"utf8");
   assert.match(source,/ちょこっとライス\|少なめ\|150g/);

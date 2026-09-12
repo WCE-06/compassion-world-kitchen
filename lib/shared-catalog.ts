@@ -15,6 +15,7 @@ type SharedProduct = {
   displaySequence?: number;
   showOnSelfRegister?: boolean;
   showOnMobileOrder?: boolean;
+  optionGroups?: { id:string; name:string; type:"single"|"multiple"; required:boolean; minChoices?:number; maxChoices?:number; choices:{ id:string; name:string; priceDelta:number; preparationMinutesDelta?:number }[] }[];
 };
 
 const categoryNames: Record<string, string> = {
@@ -66,6 +67,7 @@ export async function getSharedCatalog() {
       displaySequence: Number(product.displaySequence ?? 999999999),
       showOnSelfRegister: product.showOnSelfRegister ?? true,
       showOnMobileOrder: product.showOnMobileOrder ?? true,
+      optionGroups: product.optionGroups ?? [],
     })),
     categories: categoryIds.map((categoryId) => ({ categoryId, categoryName: categoryNames[categoryId] ?? categoryId })),
     environment: "production",
